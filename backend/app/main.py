@@ -1,7 +1,12 @@
 from fastapi import FastAPI
-
+from app.schemas.api_schemas import AnalyzeRequest
 app=FastAPI()
 
-@app.get("/")
-def health_check():
-    return {"status":"online","message":"Fake news Detector API is running!"}
+@app.post("/analyze")
+async def analyze_article(request: AnalyzeRequest):
+    return [
+        {"claim_txt": "The Earth is flat.",
+          "verdict": "False",
+            "explanation": "Scientific evidence overwhelmingly supports that the Earth is an oblate spheroid."
+            },
+    ]
