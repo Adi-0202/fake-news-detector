@@ -1,8 +1,13 @@
+import os
 import trafilatura
 import requests
 from fastapi import FastAPI
 from app.schemas.api_schemas import AnalyzeRequest
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from groq import Groq
+
+load_dotenv()
 
 app=FastAPI()
 
@@ -12,6 +17,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY)
+
+async def extract_claims_with_ai(text: str):
+    prompt = f"""
+    You are an expert fact-checker. Extract exactly 3 distinct, checkable factual claims 
+    from the news text provided below. 
+    Return them ONLY as a numbered list. Keep each claim under 15 words.
+     Do not include any introductory or concluding text.
+
+    News Text: {text[:3000]}
+    """
+    try:
+        completion=client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,  # Keeps the model strictly factual
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(f"Groq API error,{e}")
+        return "Failed to extract due to AI error"
 
 @app.post("/analyze")
 async def analyze_article(request: AnalyzeRequest):
@@ -42,8 +70,14 @@ async def analyze_article(request: AnalyzeRequest):
         
         if article_text:
             print(f"Success! Scraped: {article_text[:100]}...")
-            verdict = "SUPPORTED"
-            explanation = "Text extracted successfully."
+            
+            # 3. Pass the scraped text directly into the AI function
+            print("Sending text to Groq for claim extraction...")
+            extracted_claims= await extract_claims_with_ai(article_text)
+            print(f"Extracted Claim:\n{extracted_claims}")
+
+            verdict="SUCCESS"
+            explanation=extracted_claims
         else:
             print("Trafilatura couldn't find the article body in the HTML.")
             verdict = "UNVERIFIED"
@@ -57,7 +91,7 @@ async def analyze_article(request: AnalyzeRequest):
 
     return [
         {
-            "claim_text": "Scraping Status",
+            "claim_text": "AI Claim Extraction",
             "verdict": verdict,
             "explanation": explanation
         }
