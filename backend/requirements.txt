@@ -4,3 +4,4 @@ trafilatura
 requests
 python-dotenv
 groq
+duckduckgo-search
