@@ -1,4 +1,5 @@
 import os
+import json
 import trafilatura
 import requests
 from fastapi import FastAPI
@@ -23,23 +24,30 @@ client = Groq(api_key=GROQ_API_KEY)
 
 async def extract_claims_with_ai(text: str):
     prompt = f"""
-    You are an expert fact-checker. Extract exactly 3 distinct, checkable factual claims 
-    from the news text provided below. 
-    Return them ONLY as a numbered list. Keep each claim under 15 words.
-     Do not include any introductory or concluding text.
-
+    You are a fact-checking bot. Extract exactly 3 specific, checkable factual claims from the text below.
+    You must respond ONLY with a JSON object matching this exact schema:
+    {{
+        "claims": [
+            "First factual claim statement",
+            "Second factual claim statement",
+            "Third factual claim statement"
+        ]
+    }}
+    
     News Text: {text[:3000]}
     """
     try:
         completion=client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
             temperature=0.1,  # Keeps the model strictly factual
         )
-        return completion.choices[0].message.content
+        raw_json_string = completion.choices[0].message.content
+        return json.loads(raw_json_string)
     except Exception as e:
         print(f"Groq API error,{e}")
-        return "Failed to extract due to AI error"
+        return {"claims": ["Failed to extract claims due to an AI error."]}
 
 @app.post("/analyze")
 async def analyze_article(request: AnalyzeRequest):
@@ -73,11 +81,19 @@ async def analyze_article(request: AnalyzeRequest):
             
             # 3. Pass the scraped text directly into the AI function
             print("Sending text to Groq for claim extraction...")
-            extracted_claims= await extract_claims_with_ai(article_text)
-            print(f"Extracted Claim:\n{extracted_claims}")
+            claims_data = await extract_claims_with_ai(article_text)
+            
+            print(f"AI Raw JSON Response: {json.dumps(claims_data, indent=2)}")
 
-            verdict="SUCCESS"
-            explanation=extracted_claims
+            formatted_response = []
+            for claim in claims_data.get("claims", []):
+                formatted_response.append({
+                    "claim_text": claim,
+                    "verdict": "UNVERIFIED", # Standard default before verification runs
+                    "explanation": "Claim extracted from source text successfully."
+                })
+            
+            return formatted_response
         else:
             print("Trafilatura couldn't find the article body in the HTML.")
             verdict = "UNVERIFIED"
