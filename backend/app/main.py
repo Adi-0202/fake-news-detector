@@ -2,6 +2,7 @@ import os
 import json
 import trafilatura
 import requests
+import asyncio
 from fastapi import FastAPI
 from app.schemas.api_schemas import AnalyzeRequest
 from fastapi.middleware.cors import CORSMiddleware
@@ -88,6 +89,19 @@ async def verify_claim_with_ai(claim: str, evidence:list):
     except Exception as e:
         print(f"Groq Verification Error: {e}")
         return {"verdict": "UNVERIFIED", "explanation": "Error running verification check."}
+    
+async def parallel_verification_worker(claim: str):
+    # DDGS is synchronous; running it in to_thread stops it from blocking other tasks
+    evidence = await asyncio.to_thread(fetch_search_evidence, claim)
+    
+    # Run the async AI evaluation
+    verification = await verify_claim_with_ai(claim, evidence)
+    
+    return {
+        "claim_text": claim,
+        "verdict": verification.get("verdict", "UNVERIFIED"),
+        "explanation": verification.get("explanation", "Verification complete.")
+    }
 
 @app.post("/analyze")
 async def analyze_article(request: AnalyzeRequest):
@@ -128,19 +142,15 @@ async def analyze_article(request: AnalyzeRequest):
         
         print(f"AI Raw JSON Response: {json.dumps(claims_data, indent=2)}")
 
-        formatted_response = []
-        for claim in claims_data.get("claims", []):
-            # Gather background evidence
-            evidence = fetch_search_evidence(claim)
-            
-            # Use AI judge to cross-verify
-            verification = await verify_claim_with_ai(claim, evidence)
-            
-            formatted_response.append({
-                "claim_text": claim,
-                "verdict": verification.get("verdict", "UNVERIFIED"),
-                "explanation": verification.get("explanation", "Verification complete.")
-            })
+        # Step 3: Concurrent Live Web RAG Engine
+        print("Launching parallel verification engine...")
+        claims_list = claims_data.get("claims", [])
+        
+        # Create a list of concurrent tasks for each extracted claim
+        tasks = [parallel_verification_worker(claim) for claim in claims_list]
+        
+        # Fire all tasks simultaneously and wait for the combined results bundle
+        formatted_response = await asyncio.gather(*tasks)
         
         print(f"Final Response Sent To UI: {json.dumps(formatted_response, indent=2)}")
         return formatted_response
@@ -148,3 +158,7 @@ async def analyze_article(request: AnalyzeRequest):
     except Exception as e:
         print(f"Pipeline failed: {e}")
         return [{"claim_text": "Pipeline processing error", "verdict": "ERROR", "explanation": str(e)}]
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
