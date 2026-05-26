@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Ignore the SQLite database anywhere in the project
+fact_checker.db
+backend/fact_checker.db

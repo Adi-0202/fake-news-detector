@@ -1,34 +1,34 @@
 import os
 import json
-import trafilatura
-import requests
-import asyncio
 import sqlite3
+import asyncio
+import requests
+import trafilatura
+from datetime import datetime
 from fastapi import FastAPI
-from app.schemas.api_schemas import AnalyzeRequest
 from fastapi.middleware.cors import CORSMiddleware
+from app.schemas.api_schemas import AnalyzeRequest
 from dotenv import load_dotenv
 from groq import Groq
 from ddgs import DDGS
 
 load_dotenv()
 
-app=FastAPI()
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allows all origins for development
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
-
-DB_PATH="fact_checker.db"
+DB_PATH = "fact_checker.db"
 
 def init_db():
-    """Initializes the SQLite database and sets up the historic scans schema."""
+    """Initializes schema and applies context-aware history title column migrations."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -41,13 +41,44 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.commit()
-    conn.close()
+    # Migration Guard: Gracefully append title column if user has an existing DB file
+    try:
+        cursor.execute("ALTER TABLE scans ADD COLUMN title TEXT")
+        conn.commit()
+        print("Database schema migration successful: Added 'title' column.")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+    finally:
+        conn.close()
 
-# Run database setup immediately on file initialization
 init_db()
 
+
+async def generate_summary_title(claims: list):
+    """Generates a concise, high-level 3-5 word headline for sidebar logs."""
+    if not claims:
+        return "Untitled Scan"
+    prompt = f"""
+    Analyze these fact-checking claims and generate a punchy, highly descriptive 3 to 5 word summary title for an application history tab.
+    Focus only on the main subject and event (e.g., "NEET-UG 2026 Paper Leak" or "RBI Digital Currency Update").
+    Respond ONLY with the raw title string. Do not include quotes, markdown accents, or concluding periods.
+
+    Claims: {json.dumps(claims)}
+    """
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Title Generation Error: {e}")
+        return "Awaiting Breakdown"
+
+
 async def extract_claims_with_ai(text: str):
+    """Isolates checkable claims and enforces standalone grammatical contexts."""
     prompt = f"""
     You are an expert fact-checking extractor. Extract exactly 3 distinct, checkable factual claims from the news text provided below.
     
@@ -72,22 +103,23 @@ async def extract_claims_with_ai(text: str):
     News Text: {text[:3000]}
     """
     try:
-        completion=client.chat.completions.create(
+        completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.1,  # Keeps the model strictly factual
+            temperature=0.1,
         )
-        raw_json_string = completion.choices[0].message.content
-        return json.loads(raw_json_string)
+        return json.loads(completion.choices[0].message.content)
     except Exception as e:
-        print(f"Groq API error,{e}")
+        print(f"Groq Extraction Error: {e}")
         return {"claims": []}
-    
+
+
 def fetch_search_evidence(claim: str):
+    """Searches the live web to find supporting or contradicting sources."""
     try:
         print(f"Searching web for: '{claim}'")
-        results=DDGS().text(claim, max_results=3)
+        results = DDGS().text(claim, max_results=3)
         evidence_list = []
         for r in results:
             if "body" in r and "href" in r:
@@ -101,10 +133,12 @@ def fetch_search_evidence(claim: str):
         print(f"Search failed for '{claim}': {e}")
         return []
 
-async def verify_claim_with_ai(claim: str, evidence:list):
+
+async def verify_claim_with_ai(claim: str, evidence: list):
+    """Compares the claim against text snippets to judge its accuracy."""
     if not evidence:
-        return {"verdict" : "UNVERIFIED", "explanation": "No online evidence found to explain this evidence"}
-    
+        return {"verdict": "UNVERIFIED", "explanation": "No online evidence found to verify this claim."}
+
     just_snippets = [item["snippet"] for item in evidence]
 
     prompt = f"""
@@ -121,56 +155,49 @@ async def verify_claim_with_ai(claim: str, evidence:list):
     }}
     """
     try:
-        completion=client.chat.completions.create(
+        completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.1,
         )
         return json.loads(completion.choices[0].message.content)
-    
     except Exception as e:
         print(f"Groq Verification Error: {e}")
         return {"verdict": "UNVERIFIED", "explanation": "Error running verification check."}
-    
+
+
 async def parallel_verification_worker(claim: str):
-    # DDGS is synchronous; running it in to_thread stops it from blocking other tasks
+    """Manages searching, verifying, and packaging source links for a claim."""
     evidence = await asyncio.to_thread(fetch_search_evidence, claim)
-    
-    # Run the async AI evaluation
     verification = await verify_claim_with_ai(claim, evidence)
-    # Isolate metadata links to return back directly to our React component view
     sources = [{"title": item["title"], "url": item["url"]} for item in evidence]
     
     return {
         "claim_text": claim,
         "verdict": verification.get("verdict", "UNVERIFIED"),
         "explanation": verification.get("explanation", "Verification complete."),
-        "sources": sources  # Added back into response payload
+        "sources": sources
     }
 
+
 def calculate_overall_status(claims: list):
-    verdicts=[c["verdict"] for c in claims]
-    # 1. If even a single extracted point is completely debunked, flag the article as High Risk.
+    """Aggregates individual verdicts into an overall article authenticity profile."""
+    verdicts = [c["verdict"] for c in claims]
     if "REFUTED" in verdicts:
         return "HIGH RISK", "Critical factual assertions in this article directly contradict verified public reporting."
-    
-    # 2. If there's a split between supported entries and untraceable entries
     if "UNVERIFIED" in verdicts and "SUPPORTED" in verdicts:
         return "MIXED VALIDITY", "Some key facts match mainstream documentation, but peripheral elements lack clear indexing."
-        
-    # 3. If everything lines up perfectly
     if all(v == "SUPPORTED" for v in verdicts):
         return "TRUSTWORTHY", "All extracted core assertions are fully validated by live web reporting references."
-        
-    # 4. Default fallback if no records are verifiable
     return "UNVERIFIED", "The content references developments that cannot currently be tracked across search networks."
+
 
 @app.post("/analyze")
 async def analyze_article(request: AnalyzeRequest):
+    print(f"--- New Analysis Request ---")
     print(f"Analyzing URL: {request.url}")
 
-    # Step 1: Pretend to be a real Chrome browser
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -186,35 +213,27 @@ async def analyze_article(request: AnalyzeRequest):
     }
 
     try:
-        # Step 2: Download the raw HTML manually
         response = requests.get(request.url, headers=headers, timeout=10)
-        response.raise_for_status() # Check if the website blocked us (e.g., 403 error)
-        
-        # Step 3: Use trafilatura to extract clean text from that HTML
+        response.raise_for_status()
         article_text = trafilatura.extract(response.text)
-
-        if not article_text:
-            print("Trafilatura failed to extract text.")
-            return [{"claim_text": "Failed to extract article content.", "verdict": "ERROR", "explanation": "Could not parse page."}]
-            
-        # 3. Pass the scraped text directly into the AI function
-        print("Sending text to Groq for claim extraction...")
-        claims_data = await extract_claims_with_ai(article_text)
         
-        print(f"AI Raw JSON Response: {json.dumps(claims_data, indent=2)}")
+        if not article_text:
+            return {"overall_verdict": "ERROR", "overall_explanation": "Could not parse main content bodies.", "claims": []}
 
-        # Step 3: Concurrent Live Web RAG Engine
-        print("Launching parallel verification engine...")
+        claims_data = await extract_claims_with_ai(article_text)
         claims_list = claims_data.get("claims", [])
-        # Create a list of concurrent tasks for each extracted claim
+        
+        # Fire verification workers and title summary generator concurrently
         tasks = [parallel_verification_worker(claim) for claim in claims_list]
-        # Fire all tasks simultaneously and wait for the combined results bundle
-        claims_results = await asyncio.gather(*tasks)
-        # Calculate the aggregate metrics
+        claims_results, summary_title = await asyncio.gather(
+            asyncio.gather(*tasks),
+            generate_summary_title(claims_list)
+        )
+        
         overall_verdict, overall_explanation = calculate_overall_status(claims_results)
         
-        # Package into the new object structure
         final_payload = {
+            "title": summary_title,
             "overall_verdict": overall_verdict,
             "overall_explanation": overall_explanation,
             "claims": claims_results
@@ -223,13 +242,16 @@ async def analyze_article(request: AnalyzeRequest):
         try:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
+
+            local_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
             cursor.execute(
-                "INSERT INTO scans (url, overall_verdict, overall_explanation, claims) VALUES (?, ?, ?, ?)",
-                (request.url, overall_verdict, overall_explanation, json.dumps(claims_results))
+                "INSERT INTO scans (url, overall_verdict, overall_explanation, claims, title, time_stamp) VALUES (?, ?, ?, ?, ?, ?)",
+                (request.url, overall_verdict, overall_explanation, json.dumps(claims_results), summary_title, local_time)
             )
             conn.commit()
             conn.close()
-            print("Successfully saved analysis payload to database.")
+            print(f"Successfully saved analysis to database at local time: {local_time}")
         except Exception as db_err:
             print(f"Database Save Exception: {db_err}")
 
@@ -237,19 +259,16 @@ async def analyze_article(request: AnalyzeRequest):
 
     except Exception as e:
         print(f"Pipeline failed: {e}")
-        return {
-            "overall_verdict": "ERROR",
-            "overall_explanation": f"Pipeline execution failed: {str(e)}",
-            "claims": []
-        }
-    
+        return {"overall_verdict": "ERROR", "overall_explanation": str(e), "claims": []}
+
+
 @app.get("/history")
 async def get_history_log():
-    """Retrieves the top 10 most recent automated fact-checking scans."""
+    """Retrieves the top 10 most recent automated fact-checking scans with summaries."""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, url, overall_verdict, overall_explanation, claims, timestamp FROM scans ORDER BY timestamp DESC LIMIT 10")
+        cursor.execute("SELECT id, url, overall_verdict, overall_explanation, claims, timestamp, title FROM scans ORDER BY timestamp DESC LIMIT 10")
         rows = cursor.fetchall()
         conn.close()
         
@@ -261,7 +280,8 @@ async def get_history_log():
                 "overall_verdict": r[2],
                 "overall_explanation": r[3],
                 "claims": json.loads(r[4]),
-                "timestamp": r[5]
+                "timestamp": r[5],
+                "title": r[6] if r[6] else r[1] # Fallback to URL if historical entry pre-dates migration
             })
         return history_list
     except Exception as e:
