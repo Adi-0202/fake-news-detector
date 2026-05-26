@@ -126,6 +126,23 @@ async def parallel_verification_worker(claim: str):
         "sources": sources  # Added back into response payload
     }
 
+def calculate_overall_status(claims: list):
+    verdicts=[c["verdict"] for c in claims]
+    # 1. If even a single extracted point is completely debunked, flag the article as High Risk.
+    if "REFUTED" in verdicts:
+        return "HIGH RISK", "Critical factual assertions in this article directly contradict verified public reporting."
+    
+    # 2. If there's a split between supported entries and untraceable entries
+    if "UNVERIFIED" in verdicts and "SUPPORTED" in verdicts:
+        return "MIXED VALIDITY", "Some key facts match mainstream documentation, but peripheral elements lack clear indexing."
+        
+    # 3. If everything lines up perfectly
+    if all(v == "SUPPORTED" for v in verdicts):
+        return "TRUSTWORTHY", "All extracted core assertions are fully validated by live web reporting references."
+        
+    # 4. Default fallback if no records are verifiable
+    return "UNVERIFIED", "The content references developments that cannot currently be tracked across search networks."
+
 @app.post("/analyze")
 async def analyze_article(request: AnalyzeRequest):
     print(f"Analyzing URL: {request.url}")
@@ -169,13 +186,26 @@ async def analyze_article(request: AnalyzeRequest):
         # Create a list of concurrent tasks for each extracted claim
         tasks = [parallel_verification_worker(claim) for claim in claims_list]
         # Fire all tasks simultaneously and wait for the combined results bundle
-        formatted_response = await asyncio.gather(*tasks)
-        return formatted_response
+        claims_results = await asyncio.gather(*tasks)
+        # Calculate the aggregate metrics
+        overall_verdict, overall_explanation = calculate_overall_status(claims_results)
+        
+        # Package into the new object structure
+        final_payload = {
+            "overall_verdict": overall_verdict,
+            "overall_explanation": overall_explanation,
+            "claims": claims_results
+        }
+        
+        return final_payload
 
     except Exception as e:
         print(f"Pipeline failed: {e}")
-        return [{"claim_text": "Pipeline processing error", "verdict": "ERROR", "explanation": str(e), "sources": []}]
-
+        return {
+            "overall_verdict": "ERROR",
+            "overall_explanation": f"Pipeline execution failed: {str(e)}",
+            "claims": []
+        }
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

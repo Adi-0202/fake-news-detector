@@ -3,7 +3,7 @@ import { useState } from 'react';
 export default function App() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
+  const [analysis, setAnalysis] = useState(null); // Fixed: Stores object state instead of raw lists
   const [error, setError] = useState('');
 
   const handleAnalyze = async (e) => {
@@ -12,7 +12,7 @@ export default function App() {
 
     setLoading(true);
     setError('');
-    setResults([]);
+    setAnalysis(null);
 
     try {
       const response = await fetch('http://127.0.0.1:8000/analyze', {
@@ -28,7 +28,7 @@ export default function App() {
       }
 
       const data = await response.json();
-      setResults(data);
+      setAnalysis(data); // Stores the full structured payload
     } catch (err) {
       console.error('Analysis failed:', err);
       setError(err.message || 'Something went wrong while connecting to the backend.');
@@ -37,24 +37,30 @@ export default function App() {
     }
   };
 
-  const getVerdictStyles = (verdict) => {
+  // Styles for individual claim badges
+  const getClaimVerdictStyles = (verdict) => {
     switch (verdict) {
       case 'SUPPORTED':
-        return {
-          badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-          card: 'border-l-4 border-emerald-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]',
-        };
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 border-l-4 border-emerald-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]';
       case 'REFUTED':
-        return {
-          badge: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
-          card: 'border-l-4 border-rose-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(244,63,94,0.1)]',
-        };
+        return 'bg-rose-500/10 text-rose-400 border-rose-500/30 border-l-4 border-rose-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(244,63,94,0.1)]';
       case 'UNVERIFIED':
       default:
-        return {
-          badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-          card: 'border-l-4 border-amber-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(245,158,11,0.1)]',
-        };
+        return 'bg-amber-500/10 text-amber-400 border-amber-500/30 border-l-4 border-amber-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(245,158,11,0.1)]';
+    }
+  };
+
+  // Styles for the main global summary card banner
+  const getGlobalVerdictStyles = (verdict) => {
+    switch (verdict) {
+      case 'TRUSTWORTHY':
+        return 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400 ring-emerald-500/20';
+      case 'MIXED VALIDITY':
+        return 'border-amber-500/40 bg-amber-950/20 text-amber-400 ring-amber-500/20';
+      case 'HIGH RISK':
+        return 'border-rose-500/40 bg-rose-950/20 text-rose-400 ring-rose-500/20';
+      default:
+        return 'border-slate-800 bg-slate-900/40 text-slate-400 ring-slate-800';
     }
   };
 
@@ -103,7 +109,7 @@ export default function App() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Processing Pipeline...
+                  Running Live Analysis...
                 </span>
               ) : (
                 'Analyze Article'
@@ -118,31 +124,45 @@ export default function App() {
           )}
         </div>
 
-        {/* Results Block Display */}
+        {/* Global Summary Metric Card Block */}
+        {analysis && (
+          <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 ring-1 transition-all duration-500 ${getGlobalVerdictStyles(analysis.overall_verdict)}`}>
+            <span className="text-[10px] font-black tracking-widest uppercase opacity-60 block mb-1">
+              Aggregated Source Verdict
+            </span>
+            <h2 className="text-2xl font-black tracking-tight mb-2 uppercase">
+              {analysis.overall_verdict}
+            </h2>
+            <p className="text-sm opacity-90 leading-relaxed max-w-2xl">
+              {analysis.overall_explanation}
+            </p>
+          </div>
+        )}
+
+        {/* Claims Mapping List */}
         <div className="space-y-5 text-left">
-          {results.length > 0 && (
+          {analysis && analysis.claims.length > 0 && (
             <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
-              <h2 className="text-lg font-bold text-slate-200 tracking-tight">
-                Extracted Claims & Verdicts
+              <h2 className="text-sm font-bold text-slate-400 tracking-wider uppercase">
+                Detailed Claims Breakdown
               </h2>
-              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-xs">
-                {results.length} verified
-              </span>
             </div>
           )}
 
-          {results.map((result, index) => {
-            const styles = getVerdictStyles(result.verdict);
+          {analysis && analysis.claims.map((result, index) => {
+            const cardStyles = getClaimVerdictStyles(result.verdict);
+            const badgeColor = result.verdict === 'SUPPORTED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : result.verdict === 'REFUTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+            
             return (
               <div
                 key={index}
-                className={`p-6 rounded-xl border border-slate-800/60 backdrop-blur-sm transition-all duration-300 hover:border-slate-700/80 ${styles.card}`}
+                className={`p-6 rounded-xl border border-slate-800/60 backdrop-blur-sm transition-all duration-300 hover:border-slate-700/80 ${cardStyles}`}
               >
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
                   <h3 className="text-base md:text-lg font-semibold text-slate-100 leading-snug flex-1">
                     {result.claim_text}
                   </h3>
-                  <span className={`px-2.5 py-1 text-xs font-black tracking-widest rounded border shrink-0 uppercase ${styles.badge}`}>
+                  <span className={`px-2.5 py-1 text-xs font-black tracking-widest rounded border shrink-0 uppercase ${badgeColor}`}>
                     {result.verdict}
                   </span>
                 </div>
@@ -156,7 +176,6 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* Step 1 Feature: Clickable Source Reference Chips */}
                 {result.sources && result.sources.length > 0 && (
                   <div className="pt-3 border-t border-slate-900/60">
                     <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase block mb-2">
