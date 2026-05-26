@@ -246,7 +246,7 @@ async def analyze_article(request: AnalyzeRequest):
             local_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             cursor.execute(
-                "INSERT INTO scans (url, overall_verdict, overall_explanation, claims, title, time_stamp) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO scans (url, overall_verdict, overall_explanation, claims, title, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 (request.url, overall_verdict, overall_explanation, json.dumps(claims_results), summary_title, local_time)
             )
             conn.commit()
