@@ -3,6 +3,7 @@ import json
 import trafilatura
 import requests
 import asyncio
+import sqlite3
 from fastapi import FastAPI
 from app.schemas.api_schemas import AnalyzeRequest
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,28 @@ app.add_middleware(
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
+
+DB_PATH="fact_checker.db"
+
+def init_db():
+    """Initializes the SQLite database and sets up the historic scans schema."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS scans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT,
+            overall_verdict TEXT,
+            overall_explanation TEXT,
+            claims TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Run database setup immediately on file initialization
+init_db()
 
 async def extract_claims_with_ai(text: str):
     prompt = f"""
@@ -197,6 +220,19 @@ async def analyze_article(request: AnalyzeRequest):
             "claims": claims_results
         }
         
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO scans (url, overall_verdict, overall_explanation, claims) VALUES (?, ?, ?, ?)",
+                (request.url, overall_verdict, overall_explanation, json.dumps(claims_results))
+            )
+            conn.commit()
+            conn.close()
+            print("Successfully saved analysis payload to database.")
+        except Exception as db_err:
+            print(f"Database Save Exception: {db_err}")
+
         return final_payload
 
     except Exception as e:
@@ -206,6 +242,32 @@ async def analyze_article(request: AnalyzeRequest):
             "overall_explanation": f"Pipeline execution failed: {str(e)}",
             "claims": []
         }
+    
+@app.get("/history")
+async def get_history_log():
+    """Retrieves the top 10 most recent automated fact-checking scans."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, url, overall_verdict, overall_explanation, claims, timestamp FROM scans ORDER BY timestamp DESC LIMIT 10")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        history_list = []
+        for r in rows:
+            history_list.append({
+                "id": r[0],
+                "url": r[1],
+                "overall_verdict": r[2],
+                "overall_explanation": r[3],
+                "claims": json.loads(r[4]),
+                "timestamp": r[5]
+            })
+        return history_list
+    except Exception as e:
+        print(f"Database Fetch Exception: {e}")
+        return []
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
