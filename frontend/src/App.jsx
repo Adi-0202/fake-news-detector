@@ -1,4 +1,4 @@
-import { useState } from 'react'; // Fixed: Removed unused 'React' import
+import { useState } from 'react';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -43,34 +43,29 @@ export default function App() {
         return {
           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
           card: 'border-l-4 border-emerald-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]',
-          text: 'text-emerald-400'
         };
       case 'REFUTED':
         return {
           badge: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
           card: 'border-l-4 border-rose-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(244,63,94,0.1)]',
-          text: 'text-rose-400'
         };
       case 'UNVERIFIED':
       default:
         return {
           badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
           card: 'border-l-4 border-amber-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(245,158,11,0.1)]',
-          text: 'text-amber-400'
         };
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased p-4 md:p-12 selection:bg-indigo-500/30">
-      {/* Background Glow Accents */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-75 bg-linear-to-b from-indigo-500/10 to-transparent blur-3xl pointer-events-none" />
 
       <div className="max-w-4xl mx-auto relative z-10">
         
         {/* Header Section */}
         <header className="mb-12 text-left">
-          {/* Fixed: Wrapped emoji in an accessible span */}
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 text-xs font-semibold mb-3 tracking-wide uppercase">
             <span role="img" aria-label="robot">🤖</span> Live Web RAG Engine Active
           </div>
@@ -117,7 +112,6 @@ export default function App() {
           </form>
 
           {error && (
-            /* Fixed: Wrapped error emoji in an accessible span */
             <div className="mt-4 p-3.5 bg-rose-500/10 text-rose-400 text-sm rounded-xl border border-rose-500/20 flex items-center gap-2">
               <span role="img" aria-label="warning">⚠️</span> {error}
             </div>
@@ -153,7 +147,7 @@ export default function App() {
                   </span>
                 </div>
                 
-                <div className="pt-3 border-t border-slate-800/60">
+                <div className="pt-3 border-t border-slate-800/60 mb-4">
                   <span className="text-xs font-bold text-slate-500 tracking-wider uppercase block mb-1">
                     Automated Verification Report
                   </span>
@@ -161,6 +155,34 @@ export default function App() {
                     {result.explanation}
                   </p>
                 </div>
+
+                {/* Step 1 Feature: Clickable Source Reference Chips */}
+                {result.sources && result.sources.length > 0 && (
+                  <div className="pt-3 border-t border-slate-900/60">
+                    <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase block mb-2">
+                      Retrieved Verification Sources
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {result.sources.map((src, sIdx) => (
+                        <a
+                          key={sIdx}
+                          href={src.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs bg-slate-900 text-indigo-400 border border-slate-800 rounded-lg px-3 py-1.5 hover:bg-indigo-500/10 hover:border-indigo-500/30 inline-flex items-center gap-1.5 transition-all max-w-full truncate"
+                          title={src.title}
+                        >
+                          <svg className="w-3 h-3 text-slate-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                          <span className="truncate max-w-50 sm:max-w-75">
+                            {src.title}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -55,21 +55,31 @@ def fetch_search_evidence(claim: str):
     try:
         print(f"Searching web for: '{claim}'")
         results=DDGS().text(claim, max_results=3)
-        snippets=[r["body"] for r in results if "body" in r]
-        return snippets
+        evidence_list = []
+        for r in results:
+            if "body" in r and "href" in r:
+                evidence_list.append({
+                    "snippet": r["body"],
+                    "url": r["href"],
+                    "title": r.get("title", "Source Link")
+                })
+        return evidence_list
     except Exception as e:
-        print(f"Search execution failed for {claim}: {e}")
+        print(f"Search failed for '{claim}': {e}")
         return []
 
 async def verify_claim_with_ai(claim: str, evidence:list):
     if not evidence:
         return {"verdict" : "UNVERIFIED", "explanation": "No online evidence found to explain this evidence"}
+    
+    just_snippets = [item["snippet"] for item in evidence]
+
     prompt = f"""
     You are a high-level fact-checking judge. Compare the given 'Claim' against the provided 'Web Evidence' snippets.
     Determine if the evidence supports, refutes, or is insufficient to verify the claim.
     
     Claim: {claim}
-    Web Evidence: {json.dumps(evidence)}
+    Web Evidence: {json.dumps(just_snippets)}
     
     You must respond ONLY with a JSON object matching this exact schema:
     {{
@@ -96,11 +106,14 @@ async def parallel_verification_worker(claim: str):
     
     # Run the async AI evaluation
     verification = await verify_claim_with_ai(claim, evidence)
+    # Isolate metadata links to return back directly to our React component view
+    sources = [{"title": item["title"], "url": item["url"]} for item in evidence]
     
     return {
         "claim_text": claim,
         "verdict": verification.get("verdict", "UNVERIFIED"),
-        "explanation": verification.get("explanation", "Verification complete.")
+        "explanation": verification.get("explanation", "Verification complete."),
+        "sources": sources  # Added back into response payload
     }
 
 @app.post("/analyze")
@@ -133,8 +146,6 @@ async def analyze_article(request: AnalyzeRequest):
         if not article_text:
             print("Trafilatura failed to extract text.")
             return [{"claim_text": "Failed to extract article content.", "verdict": "ERROR", "explanation": "Could not parse page."}]
-        
-        print(f"Success! Scraped: {article_text[:60]}...")
             
         # 3. Pass the scraped text directly into the AI function
         print("Sending text to Groq for claim extraction...")
@@ -145,19 +156,15 @@ async def analyze_article(request: AnalyzeRequest):
         # Step 3: Concurrent Live Web RAG Engine
         print("Launching parallel verification engine...")
         claims_list = claims_data.get("claims", [])
-        
         # Create a list of concurrent tasks for each extracted claim
         tasks = [parallel_verification_worker(claim) for claim in claims_list]
-        
         # Fire all tasks simultaneously and wait for the combined results bundle
         formatted_response = await asyncio.gather(*tasks)
-        
-        print(f"Final Response Sent To UI: {json.dumps(formatted_response, indent=2)}")
         return formatted_response
 
     except Exception as e:
         print(f"Pipeline failed: {e}")
-        return [{"claim_text": "Pipeline processing error", "verdict": "ERROR", "explanation": str(e)}]
+        return [{"claim_text": "Pipeline processing error", "verdict": "ERROR", "explanation": str(e), "sources": []}]
 
 if __name__ == "__main__":
     import uvicorn
