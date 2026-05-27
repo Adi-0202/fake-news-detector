@@ -45,7 +45,6 @@ def init_db():
     try:
         cursor.execute("ALTER TABLE scans ADD COLUMN title TEXT")
         conn.commit()
-        print("Database schema migration successful: Added 'title' column.")
     except sqlite3.OperationalError:
         pass # Column already exists
     finally:
@@ -198,28 +197,45 @@ async def analyze_article(request: AnalyzeRequest):
     print(f"--- New Analysis Request ---")
     print(f"Analyzing URL: {request.url}")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Cache-Control": "max-age=0",
-    }
+    article_text=""
+    source_identifier=""
+
+    if request.text and request.text.strip():
+        print("Raw text content")
+        article_text=request.text.strip()
+        source_identifier = "Raw Text Entry"
+    elif request.url and request.url.strip():
+        print("url => {request.url}")
+        source_identifier=request.url.strip()
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+        }
+
+        try:
+            response = requests.get(request.url, headers=headers, timeout=10)
+            response.raise_for_status()
+            article_text = trafilatura.extract(response.text)
+        except Exception as scrap_err:
+            print(f"Scraping Fault: {scrap_err}")
+            return {"overall_verdict": "ERROR", "overall_explanation": f"Failed to acquire webpage context: {str(scrap_err)}", "claims": []}
+    else:
+        return {"overall_verdict": "ERROR", "overall_explanation": "No valid URL payload or raw text document discovered.", "claims": []}
+        
+    if not article_text:
+        return {"overall_verdict": "ERROR", "overall_explanation": "Could not parse main content bodies.", "claims": []}
 
     try:
-        response = requests.get(request.url, headers=headers, timeout=10)
-        response.raise_for_status()
-        article_text = trafilatura.extract(response.text)
-        
-        if not article_text:
-            return {"overall_verdict": "ERROR", "overall_explanation": "Could not parse main content bodies.", "claims": []}
-
         claims_data = await extract_claims_with_ai(article_text)
         claims_list = claims_data.get("claims", [])
         
@@ -247,7 +263,7 @@ async def analyze_article(request: AnalyzeRequest):
 
             cursor.execute(
                 "INSERT INTO scans (url, overall_verdict, overall_explanation, claims, title, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                (request.url, overall_verdict, overall_explanation, json.dumps(claims_results), summary_title, local_time)
+                (source_identifier, overall_verdict, overall_explanation, json.dumps(claims_results), summary_title, local_time)
             )
             conn.commit()
             conn.close()

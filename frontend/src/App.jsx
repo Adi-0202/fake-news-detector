@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('url'); // 'url' or 'text'
   const [url, setUrl] = useState('');
+  const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState('');
   const [history, setHistory] = useState([]);
   
-  // Resizable Sidebar States
-  const [sidebarWidth, setSidebarWidth] = useState(320); // Default width: 320px
+  const [sidebarWidth, setSidebarWidth] = useState(320); 
   const [isResizing, setIsResizing] = useState(false);
 
   const fetchHistory = async () => {
@@ -27,7 +28,6 @@ export default function App() {
     fetchHistory();
   }, []);
 
-  // Mouse resizing handlers
   const startResizing = useCallback((e) => {
     e.preventDefault();
     setIsResizing(true);
@@ -36,42 +36,60 @@ export default function App() {
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isResizing) return;
-      // Set boundary sizes: Minimum 240px, Maximum 480px width
       if (e.clientX >= 240 && e.clientX <= 480) {
         setSidebarWidth(e.clientX);
       }
     };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+    const handleMouseUp = () => setIsResizing(false);
 
     if (isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizing]);
 
-  const handleAnalyze = async (e, customUrl = null) => {
+  const handleAnalyze = async (e, customItem = null) => {
     if (e) e.preventDefault();
-    const targetUrl = customUrl || url;
-    if (!targetUrl.trim()) return;
+    
+    let payload = { url: "", text: "" };
+    
+    if (customItem) {
+      // Loading an item back from history logs
+      if (customItem.url === "Raw Text Entry") {
+        payload.text = customItem.claims.map(c => c.claim_text).join(". ");
+      } else {
+        payload.url = customItem.url;
+      }
+    } else {
+      // Running a fresh user scan form submission
+      if (activeTab === 'url') {
+        if (!url.trim()) return;
+        payload.url = url.trim();
+      } else {
+        if (!text.trim()) return;
+        payload.text = text.trim();
+      }
+    }
 
     setLoading(true);
     setError('');
     setAnalysis(null);
-    if (!customUrl) setUrl('');
+    
+    // Reset fields only on explicit fresh submissions
+    if (!customItem) {
+      setUrl('');
+      setText('');
+    }
 
     try {
       const response = await fetch('http://127.0.0.1:8000/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error(`Server status fault: ${response.status}`);
@@ -104,23 +122,12 @@ export default function App() {
     }
   };
 
-  const getSidebarBadgeColor = (verdict) => {
-    switch (verdict) {
-      case 'TRUSTWORTHY': return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5';
-      case 'HIGH RISK': return 'text-rose-400 border-rose-500/30 bg-rose-500/5';
-      default: return 'text-amber-400 border-amber-500/30 bg-amber-500/5';
-    }
-  };
-
   return (
     <div className={`min-h-screen bg-slate-950 text-slate-100 font-sans antialiased flex flex-col md:flex-row selection:bg-indigo-500/30 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-75 bg-linear-to-b from-indigo-500/10 to-transparent blur-3xl pointer-events-none" />
 
-      {/* History Sidebar Panel with Inline Dynamic Width */}
-      <aside 
-        style={{ width: `${sidebarWidth}px` }}
-        className="hidden md:block bg-slate-900/30 border-r border-slate-900/80 p-6 z-10 shrink-0 h-screen sticky top-0 overflow-y-auto"
-      >
+      {/* History Sidebar Panel */}
+      <aside style={{ width: `${sidebarWidth}px` }} className="hidden md:block bg-slate-900/30 border-r border-slate-900/80 p-6 z-10 shrink-0 h-screen sticky top-0 overflow-y-auto">
         <h2 className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-5 flex items-center gap-2">
           <span>⏳</span> Recent Scan Logs
         </h2>
@@ -135,19 +142,19 @@ export default function App() {
                 className="w-full text-left p-3.5 rounded-xl border border-slate-900 bg-slate-950/40 hover:bg-slate-900/60 hover:border-slate-800/80 transition-all flex flex-col gap-2 group cursor-pointer"
               >
                 <div className="flex justify-between items-center gap-2 w-full">
-                  <span className={`text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded border ${getSidebarBadgeColor(item.overall_verdict)}`}>
+                  <span className={`text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded border ${item.overall_verdict === 'TRUSTWORTHY' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5' : item.overall_verdict === 'HIGH RISK' ? 'text-rose-400 border-rose-500/30 bg-rose-500/5' : 'text-amber-400 border-amber-500/30 bg-amber-500/5'}`}>
                     {item.overall_verdict}
                   </span>
                   <span className="text-[10px] text-slate-600 font-mono">
                     {item.timestamp.split(' ')[1]?.slice(0, 5) || 'Past'}
                   </span>
                 </div>
-                {/* Fixed Feature: Prominent short AI summary title instead of unreadable URL strings */}
                 <h4 className="text-xs font-bold text-slate-200 truncate w-full group-hover:text-indigo-400 transition-colors">
                   {item.title}
                 </h4>
-                <p className="text-[11px] text-slate-600 truncate w-full">
-                  {item.url}
+                {/* Fixed Display rule: Swap long url tokens for clean indicators if row is text payload */}
+                <p className="text-[11px] text-slate-600 truncate w-full font-mono">
+                  {item.url === "Raw Text Entry" ? "📄 Raw Text Analysis" : item.url}
                 </p>
               </button>
             ))}
@@ -155,18 +162,13 @@ export default function App() {
         )}
       </aside>
 
-      {/* Interactive Drag Resizer Grip Handle Line */}
-      <div 
-        onMouseDown={startResizing} 
-        className={`hidden md:block w-1 cursor-col-resize sticky top-0 h-screen z-20 transition-colors duration-150 border-r border-slate-900/40 ${
-          isResizing ? 'bg-indigo-500' : 'bg-transparent hover:bg-indigo-500/40'
-        }`}
-      />
+      {/* Interactive Drag Resizer Grip Handle */}
+      <div onMouseDown={startResizing} className="hidden md:block w-1 cursor-col-resize sticky top-0 h-screen z-20 transition-colors border-r border-slate-900/40 hover:bg-indigo-500/40" />
 
       {/* Main Workspace Frame */}
       <main className="flex-1 p-4 md:p-12 relative z-10 w-full overflow-x-hidden">
         <div className="max-w-4xl mx-auto w-full">
-          <header className="mb-12 text-left">
+          <header className="mb-8 text-left">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 text-xs font-semibold mb-3 tracking-wide uppercase">
               <span role="img" aria-label="robot">🤖</span> Live Web RAG Engine Active
             </div>
@@ -174,38 +176,84 @@ export default function App() {
               Neural Sieve Cascade
             </h1>
             <p className="mt-2 text-slate-400 text-base leading-relaxed">
-              Deconstruct complex articles into structured claims and cross-examine them against organic search indexing instantaneously.
+              Deconstruct complex payloads into structured claims and cross-examine them against organic search indexing instantaneously.
             </p>
           </header>
 
-          {/* Form Container */}
-          <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl border border-slate-800/80 shadow-xl mb-10">
-            <form onSubmit={(e) => handleAnalyze(e)} className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="url"
-                required
-                placeholder="Paste article URL here (NDTV, The Hindu, Reuters...)"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="flex-1 px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className={`sm:px-6 py-3.5 rounded-xl font-semibold text-white tracking-wide transition-all duration-200 shadow-lg cursor-pointer ${
-                  loading ? 'bg-indigo-600/50 cursor-not-allowed opacity-80' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98]'
-                }`}
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Running Pipeline...
-                  </span>
-                ) : 'Analyze Article'}
-              </button>
+          {/* Interactive Input Channel Tabs Switcher Bar */}
+          <div className="flex gap-2 mb-4 border-b border-slate-900 pb-px">
+            <button
+              onClick={() => { setActiveTab('url'); setError(''); }}
+              className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
+                activeTab === 'url'
+                  ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              🔗 URL Link Analysis
+            </button>
+            <button
+              onClick={() => { setActiveTab('text'); setError(''); }}
+              className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
+                activeTab === 'text'
+                  ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              📄 Raw Text Content
+            </button>
+          </div>
+
+          {/* Dynamic Form Controller Box */}
+          <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl rounded-tl-none border border-slate-800/80 shadow-xl mb-10">
+            <form onSubmit={(e) => handleAnalyze(e)} className="flex flex-col gap-4">
+              
+              {activeTab === 'url' ? (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="url"
+                    required
+                    placeholder="Paste full news article URL here..."
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className="flex-1 px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="sm:px-6 py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] cursor-pointer"
+                  >
+                    {loading ? 'Running...' : 'Analyze Article'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <textarea
+                    required
+                    rows={5}
+                    placeholder="Type or paste custom rumors, messaging chains, statements, or claims text here to extract and verify..."
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner font-sans text-sm leading-relaxed"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center"
+                  >
+                    {loading ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Cross-Examining Input Claims...
+                      </span>
+                    ) : 'Analyze Raw Text Information'}
+                  </button>
+                </div>
+              )}
+
             </form>
 
             {error && (
@@ -215,9 +263,9 @@ export default function App() {
             )}
           </div>
 
-          {/* Global Metric Summary Display Banner */}
+          {/* Global Summary Display Banner */}
           {analysis && (
-            <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 ring-1 transition-all duration-500 text-left ${getGlobalVerdictStyles(analysis.overall_verdict)}`}>
+            <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 ring-1 transition-all text-left ${getGlobalVerdictStyles(analysis.overall_verdict)}`}>
               <span className="text-[10px] font-black tracking-widest uppercase opacity-60 block mb-1">
                 Aggregated Source Verdict
               </span>
@@ -230,7 +278,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Extracted Claims Mapping Frame */}
+          {/* Claims List Frame */}
           <div className="space-y-5 text-left">
             {analysis && analysis.claims && analysis.claims.length > 0 && (
               <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
