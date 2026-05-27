@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('url'); // 'url' or 'text'
+  const [activeTab, setActiveTab] = useState('url'); // 'url', 'text', or 'pdf'
   const [url, setUrl] = useState('');
   const [text, setText] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState('');
@@ -52,51 +53,82 @@ export default function App() {
     };
   }, [isResizing]);
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setPdfFile(e.target.files[0]);
+    }
+  };
+
   const handleAnalyze = async (e, customItem = null) => {
     if (e) e.preventDefault();
     
-    let payload = { url: "", text: "" };
-    
+    setLoading(true);
+    setError('');
+    setAnalysis(null);
+
+    let endpoint = 'http://127.0.0.1:8000/analyze';
+    let requestOptions = {};
+
     if (customItem) {
-      // Loading an item back from history logs
-      if (customItem.url === "Raw Text Entry") {
+      // Re-loading from history
+      endpoint = 'http://127.0.0.1:8000/analyze';
+      let payload = { url: "", text: "" };
+      if (customItem.url === "Raw Text Entry" || customItem.url.startsWith("PDF: ")) {
         payload.text = customItem.claims.map(c => c.claim_text).join(". ");
       } else {
         payload.url = customItem.url;
       }
+      requestOptions = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      };
     } else {
-      // Running a fresh user scan form submission
-      if (activeTab === 'url') {
-        if (!url.trim()) return;
-        payload.url = url.trim();
+      // Fresh new input form submission
+      if (activeTab === 'pdf') {
+        if (!pdfFile) {
+          setError('Please select a valid PDF file to upload.');
+          setLoading(false);
+          return;
+        }
+        endpoint = 'http://127.0.0.1:8000/analyze/pdf';
+        const formData = new FormData();
+        formData.append('file', pdfFile);
+        requestOptions = {
+          method: 'POST',
+          body: formData // Form data handles multipart headers automatically
+        };
       } else {
-        if (!text.trim()) return;
-        payload.text = text.trim();
+        let payload = { url: "", text: "" };
+        if (activeTab === 'url') {
+          if (!url.trim()) { setLoading(false); return; }
+          payload.url = url.trim();
+        } else {
+          if (!text.trim()) { setLoading(false); return; }
+          payload.text = text.trim();
+        }
+        requestOptions = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        };
       }
     }
 
-    setLoading(true);
-    setError('');
-    setAnalysis(null);
-    
-    // Reset fields only on explicit fresh submissions
-    if (!customItem) {
-      setUrl('');
-      setText('');
-    }
-
     try {
-      const response = await fetch('http://127.0.0.1:8000/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
+      const response = await fetch(endpoint, requestOptions);
       if (!response.ok) throw new Error(`Server status fault: ${response.status}`);
 
       const data = await response.json();
       setAnalysis(data);
       fetchHistory();
+      
+      // Clear inputs safely
+      if (!customItem) {
+        setUrl('');
+        setText('');
+        setPdfFile(null);
+      }
     } catch (err) {
       console.error('Analysis failed:', err);
       setError(err.message || 'Something went wrong while connecting to the backend.');
@@ -110,15 +142,6 @@ export default function App() {
       case 'SUPPORTED': return 'border-l-4 border-emerald-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]';
       case 'REFUTED': return 'border-l-4 border-rose-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(244,63,94,0.1)]';
       default: return 'border-l-4 border-amber-500 bg-slate-900/40 shadow-[0_0_15px_-3px_rgba(245,158,11,0.1)]';
-    }
-  };
-
-  const getGlobalVerdictStyles = (verdict) => {
-    switch (verdict) {
-      case 'TRUSTWORTHY': return 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400 ring-emerald-500/20';
-      case 'MIXED VALIDITY': return 'border-amber-500/40 bg-amber-950/20 text-amber-400 ring-amber-500/20';
-      case 'HIGH RISK': return 'border-rose-500/40 bg-rose-950/20 text-rose-400 ring-rose-500/20';
-      default: return 'border-slate-800 bg-slate-900/40 text-slate-400 ring-slate-800';
     }
   };
 
@@ -152,9 +175,8 @@ export default function App() {
                 <h4 className="text-xs font-bold text-slate-200 truncate w-full group-hover:text-indigo-400 transition-colors">
                   {item.title}
                 </h4>
-                {/* Fixed Display rule: Swap long url tokens for clean indicators if row is text payload */}
                 <p className="text-[11px] text-slate-600 truncate w-full font-mono">
-                  {item.url === "Raw Text Entry" ? "📄 Raw Text Analysis" : item.url}
+                  {item.url === "Raw Text Entry" ? "📄 Raw Text Analysis" : item.url.startsWith("PDF: ") ? "📁 " + item.url : item.url}
                 </p>
               </button>
             ))}
@@ -185,22 +207,26 @@ export default function App() {
             <button
               onClick={() => { setActiveTab('url'); setError(''); }}
               className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
-                activeTab === 'url'
-                  ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                activeTab === 'url' ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
               }`}
             >
-              🔗 URL Link Analysis
+              🔗 URL Link
             </button>
             <button
               onClick={() => { setActiveTab('text'); setError(''); }}
               className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
-                activeTab === 'text'
-                  ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                activeTab === 'text' ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
               }`}
             >
-              📄 Raw Text Content
+              📄 Raw Text
+            </button>
+            <button
+              onClick={() => { setActiveTab('pdf'); setError(''); }}
+              className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
+                activeTab === 'pdf' ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              📁 PDF Document
             </button>
           </div>
 
@@ -208,7 +234,7 @@ export default function App() {
           <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl rounded-tl-none border border-slate-800/80 shadow-xl mb-10">
             <form onSubmit={(e) => handleAnalyze(e)} className="flex flex-col gap-4">
               
-              {activeTab === 'url' ? (
+              {activeTab === 'url' && (
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="url"
@@ -218,38 +244,49 @@ export default function App() {
                     onChange={(e) => setUrl(e.target.value)}
                     className="flex-1 px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner"
                   />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="sm:px-6 py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] cursor-pointer"
-                  >
+                  <button type="submit" disabled={loading} className="sm:px-6 py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] cursor-pointer">
                     {loading ? 'Running...' : 'Analyze Article'}
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {activeTab === 'text' && (
                 <div className="flex flex-col gap-3">
                   <textarea
                     required
                     rows={5}
-                    placeholder="Type or paste custom rumors, messaging chains, statements, or claims text here to extract and verify..."
+                    placeholder="Type or paste custom statements or viral claims here..."
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     className="w-full px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner font-sans text-sm leading-relaxed"
                   />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center"
-                  >
-                    {loading ? (
-                      <span className="flex items-center gap-2">
-                        <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Cross-Examining Input Claims...
-                      </span>
-                    ) : 'Analyze Raw Text Information'}
+                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] cursor-pointer flex items-center justify-center">
+                    {loading ? 'Processing...' : 'Analyze Raw Text Information'}
+                  </button>
+                </div>
+              )}
+
+              {activeTab === 'pdf' && (
+                <div className="flex flex-col gap-4">
+                  <div className="border-2 border-dashed border-slate-800 rounded-xl p-8 text-center bg-slate-950/40 relative hover:border-indigo-500/40 transition-colors">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <span className="text-3xl">📁</span>
+                      <p className="text-sm font-medium text-slate-300">
+                        {pdfFile ? pdfFile.name : "Click or Drag to browse a PDF report"}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        Supports standard vector PDF file structures up to 15MB
+                      </p>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={loading || !pdfFile} className={`w-full py-3.5 rounded-xl font-semibold text-white tracking-wide transition-all ${!pdfFile ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer active:scale-[0.98]'}`}>
+                    {loading ? 'Reading & Verifying Document Pages...' : 'Analyze Uploaded PDF'}
                   </button>
                 </div>
               )}
@@ -265,7 +302,7 @@ export default function App() {
 
           {/* Global Summary Display Banner */}
           {analysis && (
-            <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 ring-1 transition-all text-left ${getGlobalVerdictStyles(analysis.overall_verdict)}`}>
+            <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 ring-1 transition-all text-left ${analysis.overall_verdict === 'TRUSTWORTHY' ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400 ring-emerald-500/20' : analysis.overall_verdict === 'HIGH RISK' ? 'border-rose-500/40 bg-rose-950/20 text-rose-400 ring-rose-500/20' : 'border-amber-500/40 bg-amber-950/20 text-amber-400 ring-amber-500/20'}`}>
               <span className="text-[10px] font-black tracking-widest uppercase opacity-60 block mb-1">
                 Aggregated Source Verdict
               </span>

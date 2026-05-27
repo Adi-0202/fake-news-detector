@@ -5,7 +5,9 @@ import asyncio
 import requests
 import trafilatura
 from datetime import datetime
-from fastapi import FastAPI
+from pypdf import PdfReader
+from fastapi import FastAPI, UploadFile, File
+from io import BytesIO
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas.api_schemas import AnalyzeRequest
 from dotenv import load_dotenv
@@ -192,90 +194,97 @@ def calculate_overall_status(claims: list):
     return "UNVERIFIED", "The content references developments that cannot currently be tracked across search networks."
 
 
+async def core_processing_pipeline(article_text: str, source_identifier: str):
+    """Processes clean strings through the extraction, search, and validation loop."""
+    print("Extracting checkable assertions...")
+    claims_data = await extract_claims_with_ai(article_text)
+    claims_list = claims_data.get("claims", [])
+    
+    print("Launching parallel verification engine...")
+    tasks = [parallel_verification_worker(claim) for claim in claims_list]
+    claims_results, summary_title = await asyncio.gather(
+        asyncio.gather(*tasks),
+        generate_summary_title(claims_list)
+    )
+    
+    overall_verdict, overall_explanation = calculate_overall_status(claims_results)
+    
+    final_payload = {
+        "title": summary_title,
+        "overall_verdict": overall_verdict,
+        "overall_explanation": overall_explanation,
+        "claims": claims_results
+    }
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        local_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            "INSERT INTO scans (url, overall_verdict, overall_explanation, claims, title, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+            (source_identifier, overall_verdict, overall_explanation, json.dumps(claims_results), summary_title, local_time)
+        )
+        conn.commit()
+        conn.close()
+        print(f"Saved payload to database under origin token: {source_identifier}")
+    except Exception as db_err:
+        print(f"Database Save Exception: {db_err}")
+
+    return final_payload
+
+
 @app.post("/analyze")
 async def analyze_article(request: AnalyzeRequest):
-    print(f"--- New Analysis Request ---")
-    print(f"Analyzing URL: {request.url}")
-
-    article_text=""
-    source_identifier=""
-
+    print(f"--- New Analysis Request (URL/Text) ---")
+    
     if request.text and request.text.strip():
-        print("Raw text content")
-        article_text=request.text.strip()
-        source_identifier = "Raw Text Entry"
+        return await core_processing_pipeline(request.text.strip(), "Raw Text Entry")
+        
     elif request.url and request.url.strip():
-        print("url => {request.url}")
-        source_identifier=request.url.strip()
-
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Cache-Control": "max-age=0",
         }
-
         try:
             response = requests.get(request.url, headers=headers, timeout=10)
             response.raise_for_status()
             article_text = trafilatura.extract(response.text)
+            if not article_text:
+                return {"overall_verdict": "ERROR", "overall_explanation": "Could not parse main content from link.", "claims": []}
+            return await core_processing_pipeline(article_text, request.url.strip())
         except Exception as scrap_err:
-            print(f"Scraping Fault: {scrap_err}")
             return {"overall_verdict": "ERROR", "overall_explanation": f"Failed to acquire webpage context: {str(scrap_err)}", "claims": []}
-    else:
-        return {"overall_verdict": "ERROR", "overall_explanation": "No valid URL payload or raw text document discovered.", "claims": []}
-        
-    if not article_text:
-        return {"overall_verdict": "ERROR", "overall_explanation": "Could not parse main content bodies.", "claims": []}
+            
+    return {"overall_verdict": "ERROR", "overall_explanation": "No valid URL payload or raw text document discovered.", "claims": []}
 
+
+@app.post("/analyze/pdf")
+async def analyze_pdf(file: UploadFile = File(...)):
+    """Ingests a binary PDF file stream, reads text data, and kicks off verification."""
+    print(f"--- New Analysis Request (PDF Document) ---")
+    print(f"Processing Uploaded File: {file.filename}")
+    
     try:
-        claims_data = await extract_claims_with_ai(article_text)
-        claims_list = claims_data.get("claims", [])
+        # Read file contents into buffer memory
+        contents = await file.read()
+        pdf_stream = BytesIO(contents)
+        reader = PdfReader(pdf_stream)
         
-        # Fire verification workers and title summary generator concurrently
-        tasks = [parallel_verification_worker(claim) for claim in claims_list]
-        claims_results, summary_title = await asyncio.gather(
-            asyncio.gather(*tasks),
-            generate_summary_title(claims_list)
-        )
+        # Loop through pages and concatenate raw text contents
+        extracted_text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                extracted_text += page_text + "\n"
+                
+        if not extracted_text.strip():
+            return {"overall_verdict": "ERROR", "overall_explanation": "PDF file appears empty or consists purely of unreadable scanned images.", "claims": []}
+            
+        source_label = f"PDF: {file.filename}"
+        return await core_processing_pipeline(extracted_text.strip(), source_label)
         
-        overall_verdict, overall_explanation = calculate_overall_status(claims_results)
-        
-        final_payload = {
-            "title": summary_title,
-            "overall_verdict": overall_verdict,
-            "overall_explanation": overall_explanation,
-            "claims": claims_results
-        }
-        
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-
-            local_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            cursor.execute(
-                "INSERT INTO scans (url, overall_verdict, overall_explanation, claims, title, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                (source_identifier, overall_verdict, overall_explanation, json.dumps(claims_results), summary_title, local_time)
-            )
-            conn.commit()
-            conn.close()
-            print(f"Successfully saved analysis to database at local time: {local_time}")
-        except Exception as db_err:
-            print(f"Database Save Exception: {db_err}")
-
-        return final_payload
-
-    except Exception as e:
-        print(f"Pipeline failed: {e}")
-        return {"overall_verdict": "ERROR", "overall_explanation": str(e), "claims": []}
+    except Exception as pdf_err:
+        print(f"PDF Parsing Exception: {pdf_err}")
+        return {"overall_verdict": "ERROR", "overall_explanation": f"Failed to digest PDF document structures: {str(pdf_err)}", "claims": []}
 
 
 @app.get("/history")
