@@ -4,6 +4,8 @@ import sqlite3
 import asyncio
 import requests
 import trafilatura
+import easyocr
+from PIL import Image
 from datetime import datetime
 from pypdf import PdfReader
 from fastapi import FastAPI, UploadFile, File
@@ -28,6 +30,8 @@ app.add_middleware(
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 DB_PATH = "fact_checker.db"
+
+ocr_reader = easyocr.Reader(['en'])
 
 def init_db():
     """Initializes schema and applies context-aware history title column migrations."""
@@ -286,6 +290,39 @@ async def analyze_pdf(file: UploadFile = File(...)):
         print(f"PDF Parsing Exception: {pdf_err}")
         return {"overall_verdict": "ERROR", "overall_explanation": f"Failed to digest PDF document structures: {str(pdf_err)}", "claims": []}
 
+@app.post("/analyze/image")
+async def analyze_image(file: UploadFile = File(...)):
+    """Ingests binary picture inputs, translates visual letters via local OCR, and tracks reality paths."""
+    print(f"--- New Analysis Request (Visual OCR Image) ---")
+    print(f"Processing Uploaded Image File: {file.filename}")
+    try:
+        # Read file data directly into a PIL processing instance
+        file_bytes = await file.read()
+        image_stream = Image.open(BytesIO(file_bytes))
+        
+        # Convert image data to raw byte arrays for EasyOCR optimization
+        img_byte_arr = BytesIO()
+        image_stream.save(img_byte_arr, format=image_stream.format if image_stream.format else 'PNG')
+        img_bytes = img_byte_arr.getvalue()
+
+        # Execute local computer vision model inference execution loop
+        ocr_results = ocr_reader.readtext(img_bytes, detail=0)
+        extracted_text = " ".join(ocr_results)
+
+        if not extracted_text.strip():
+            return {
+                "overall_verdict": "ERROR", 
+                "overall_explanation": "No distinct printed text strings or alphanumeric tokens could be recognized in this image.", 
+                "claims": []
+            }
+
+        print(f"OCR Inference Extraction Complete. Captured string tokens: '{extracted_text[:200]}...'")
+        source_label = f"Image: {file.filename}"
+        return await core_processing_pipeline(extracted_text.strip(), source_label)
+
+    except Exception as img_err:
+        print(f"OCR Pipeline Processing Exception: {img_err}")
+        return {"overall_verdict": "ERROR", "overall_explanation": f"Failed to execute computer vision OCR: {str(img_err)}", "claims": []}
 
 @app.get("/history")
 async def get_history_log():

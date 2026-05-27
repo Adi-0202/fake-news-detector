@@ -7,3 +7,5 @@ groq
 ddgs
 pypdf
 python-multipart
+easyocr
+pillow

@@ -1,14 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('url'); // 'url', 'text', or 'pdf'
+  const [activeTab, setActiveTab] = useState('url'); // 'url', 'text', 'pdf', or 'image'
   const [url, setUrl] = useState('');
   const [text, setText] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState('');
   const [history, setHistory] = useState([]);
+  
+  // DOM References to safely clear native browser file buffers
+  const pdfInputRef = useRef(null);
+  const imageInputRef = useRef(null);
   
   const [sidebarWidth, setSidebarWidth] = useState(320); 
   const [isResizing, setIsResizing] = useState(false);
@@ -53,12 +58,6 @@ export default function App() {
     };
   }, [isResizing]);
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setPdfFile(e.target.files[0]);
-    }
-  };
-
   const handleAnalyze = async (e, customItem = null) => {
     if (e) e.preventDefault();
     
@@ -70,11 +69,10 @@ export default function App() {
     let requestOptions = {};
 
     if (customItem) {
-      // Re-loading from history
       endpoint = 'http://127.0.0.1:8000/analyze';
       let payload = { url: "", text: "" };
-      if (customItem.url === "Raw Text Entry" || customItem.url.startsWith("PDF: ")) {
-        payload.text = customItem.claims.map(c => c.claim_text).join(". ");
+      if (customItem.url === "Raw Text Entry" || customItem.url.startsWith("PDF: ") || customItem.url.startsWith("Image: ")) {
+        payload.text = (customItem.claims || []).map(c => c.claim_text).join(". ");
       } else {
         payload.url = customItem.url;
       }
@@ -84,20 +82,18 @@ export default function App() {
         body: JSON.stringify(payload)
       };
     } else {
-      // Fresh new input form submission
       if (activeTab === 'pdf') {
-        if (!pdfFile) {
-          setError('Please select a valid PDF file to upload.');
-          setLoading(false);
-          return;
-        }
+        if (!pdfFile) { setError('Please select a valid PDF file.'); setLoading(false); return; }
         endpoint = 'http://127.0.0.1:8000/analyze/pdf';
         const formData = new FormData();
         formData.append('file', pdfFile);
-        requestOptions = {
-          method: 'POST',
-          body: formData // Form data handles multipart headers automatically
-        };
+        requestOptions = { method: 'POST', body: formData };
+      } else if (activeTab === 'image') {
+        if (!imageFile) { setError('Please choose a valid image file.'); setLoading(false); return; }
+        endpoint = 'http://127.0.0.1:8000/analyze/image';
+        const formData = new FormData();
+        formData.append('file', imageFile);
+        requestOptions = { method: 'POST', body: formData };
       } else {
         let payload = { url: "", text: "" };
         if (activeTab === 'url') {
@@ -120,14 +116,25 @@ export default function App() {
       if (!response.ok) throw new Error(`Server status fault: ${response.status}`);
 
       const data = await response.json();
-      setAnalysis(data);
-      fetchHistory();
       
-      // Clear inputs safely
+      // Enforce data contract fallback synchronization
+      setAnalysis({
+        title: data.title || 'Analysis Report',
+        overall_verdict: data.overall_verdict || 'UNVERIFIED',
+        overall_explanation: data.overall_explanation || 'No tracking parameters derived.',
+        claims: data.claims || []
+      });
+      
+      await fetchHistory();
+      
+      // Safe cleanup phase: Clear both React states and underlying DOM values
       if (!customItem) {
         setUrl('');
         setText('');
         setPdfFile(null);
+        setImageFile(null);
+        if (pdfInputRef.current) pdfInputRef.current.value = "";
+        if (imageInputRef.current) imageInputRef.current.value = "";
       }
     } catch (err) {
       console.error('Analysis failed:', err);
@@ -169,14 +176,14 @@ export default function App() {
                     {item.overall_verdict}
                   </span>
                   <span className="text-[10px] text-slate-600 font-mono">
-                    {item.timestamp.split(' ')[1]?.slice(0, 5) || 'Past'}
+                    {item.timestamp ? item.timestamp.split(' ')[1]?.slice(0, 5) : 'Past'}
                   </span>
                 </div>
                 <h4 className="text-xs font-bold text-slate-200 truncate w-full group-hover:text-indigo-400 transition-colors">
-                  {item.title}
+                  {item.title || "Untracked Snapshot"}
                 </h4>
                 <p className="text-[11px] text-slate-600 truncate w-full font-mono">
-                  {item.url === "Raw Text Entry" ? "📄 Raw Text Analysis" : item.url.startsWith("PDF: ") ? "📁 " + item.url : item.url}
+                  {item.url === "Raw Text Entry" ? "📄 Raw Text Analysis" : item.url?.startsWith("PDF: ") ? "📁 " + item.url : item.url?.startsWith("Image: ") ? "🖼️ " + item.url : item.url}
                 </p>
               </button>
             ))}
@@ -184,7 +191,7 @@ export default function App() {
         )}
       </aside>
 
-      {/* Interactive Drag Resizer Grip Handle */}
+      {/* Interactive Drag Resizer Grip */}
       <div onMouseDown={startResizing} className="hidden md:block w-1 cursor-col-resize sticky top-0 h-screen z-20 transition-colors border-r border-slate-900/40 hover:bg-indigo-500/40" />
 
       {/* Main Workspace Frame */}
@@ -202,49 +209,33 @@ export default function App() {
             </p>
           </header>
 
-          {/* Interactive Input Channel Tabs Switcher Bar */}
-          <div className="flex gap-2 mb-4 border-b border-slate-900 pb-px">
-            <button
-              onClick={() => { setActiveTab('url'); setError(''); }}
-              className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
-                activeTab === 'url' ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              🔗 URL Link
-            </button>
-            <button
-              onClick={() => { setActiveTab('text'); setError(''); }}
-              className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
-                activeTab === 'text' ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              📄 Raw Text
-            </button>
-            <button
-              onClick={() => { setActiveTab('pdf'); setError(''); }}
-              className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
-                activeTab === 'pdf' ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              📁 PDF Document
-            </button>
+          {/* Tab Selection Bar */}
+          <div className="flex flex-wrap gap-1 mb-4 border-b border-slate-900 pb-px">
+            {[['url', '🔗 URL Link'], ['text', '📄 Raw Text'], ['pdf', '📁 PDF File'], ['image', '🖼️ Image Forward']].map(([tabId, label]) => (
+              <button
+                key={tabId}
+                onClick={() => { setActiveTab(tabId); setError(''); }}
+                className={`px-4 py-2.5 text-sm font-bold tracking-wide rounded-t-xl transition-all border-t border-x cursor-pointer ${
+                  activeTab === tabId ? 'bg-slate-900/60 border-slate-800 text-indigo-400 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {/* Dynamic Form Controller Box */}
+          {/* Input Interface Box */}
           <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl rounded-tl-none border border-slate-800/80 shadow-xl mb-10">
             <form onSubmit={(e) => handleAnalyze(e)} className="flex flex-col gap-4">
               
               {activeTab === 'url' && (
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
-                    type="url"
-                    required
-                    placeholder="Paste full news article URL here..."
-                    value={url}
+                    type="url" required placeholder="Paste full news article URL here..." value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    className="flex-1 px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner"
+                    className="flex-1 px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-200 shadow-inner"
                   />
-                  <button type="submit" disabled={loading} className="sm:px-6 py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] cursor-pointer">
+                  <button type="submit" disabled={loading} className="sm:px-6 py-3.5 rounded-xl font-semibold text-white bg-indigo-600 hover:bg-indigo-500 cursor-pointer">
                     {loading ? 'Running...' : 'Analyze Article'}
                   </button>
                 </div>
@@ -253,14 +244,11 @@ export default function App() {
               {activeTab === 'text' && (
                 <div className="flex flex-col gap-3">
                   <textarea
-                    required
-                    rows={5}
-                    placeholder="Type or paste custom statements or viral claims here..."
-                    value={text}
+                    required rows={5} placeholder="Type or paste custom statements or viral claims here..." value={text}
                     onChange={(e) => setText(e.target.value)}
-                    className="w-full px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-200 placeholder:text-slate-600 shadow-inner font-sans text-sm leading-relaxed"
+                    className="w-full px-4 py-3.5 bg-slate-950/80 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-200 font-sans text-sm shadow-inner"
                   />
-                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded-xl font-semibold text-white tracking-wide bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] cursor-pointer flex items-center justify-center">
+                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded-xl font-semibold text-white bg-indigo-600 hover:bg-indigo-500 cursor-pointer">
                     {loading ? 'Processing...' : 'Analyze Raw Text Information'}
                   </button>
                 </div>
@@ -269,24 +257,41 @@ export default function App() {
               {activeTab === 'pdf' && (
                 <div className="flex flex-col gap-4">
                   <div className="border-2 border-dashed border-slate-800 rounded-xl p-8 text-center bg-slate-950/40 relative hover:border-indigo-500/40 transition-colors">
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    <input 
+                      type="file" 
+                      ref={pdfInputRef}
+                      accept=".pdf" 
+                      onChange={(e) => e.target.files?.[0] && setPdfFile(e.target.files[0])} 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                     />
-                    <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="flex flex-col items-center gap-2">
                       <span className="text-3xl">📁</span>
-                      <p className="text-sm font-medium text-slate-300">
-                        {pdfFile ? pdfFile.name : "Click or Drag to browse a PDF report"}
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        Supports standard vector PDF file structures up to 15MB
-                      </p>
+                      <p className="text-sm font-medium text-slate-300">{pdfFile ? pdfFile.name : "Click or Drag to browse a PDF report"}</p>
                     </div>
                   </div>
-                  <button type="submit" disabled={loading || !pdfFile} className={`w-full py-3.5 rounded-xl font-semibold text-white tracking-wide transition-all ${!pdfFile ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer active:scale-[0.98]'}`}>
-                    {loading ? 'Reading & Verifying Document Pages...' : 'Analyze Uploaded PDF'}
+                  <button type="submit" disabled={loading || !pdfFile} className={`w-full py-3.5 rounded-xl font-semibold text-white ${!pdfFile ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer'}`}>
+                    {loading ? 'Verifying Document Pages...' : 'Analyze Uploaded PDF'}
+                  </button>
+                </div>
+              )}
+
+              {activeTab === 'image' && (
+                <div className="flex flex-col gap-4">
+                  <div className="border-2 border-dashed border-slate-800 rounded-xl p-8 text-center bg-slate-950/40 relative hover:border-indigo-500/40 transition-colors">
+                    <input 
+                      type="file" 
+                      ref={imageInputRef}
+                      accept="image/*" 
+                      onChange={(e) => e.target.files?.[0] && setImageFile(e.target.files[0])} 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-3xl">🖼️</span>
+                      <p className="text-sm font-medium text-slate-300">{imageFile ? imageFile.name : "Upload a WhatsApp Forward Screenshot (PNG/JPG)"}</p>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={loading || !imageFile} className={`w-full py-3.5 rounded-xl font-semibold text-white ${!imageFile ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer'}`}>
+                    {loading ? 'Running Computer Vision OCR Inference...' : 'Extract & Verify Image Text'}
                   </button>
                 </div>
               )}
@@ -295,33 +300,25 @@ export default function App() {
 
             {error && (
               <div className="mt-4 p-3.5 bg-rose-500/10 text-rose-400 text-sm rounded-xl border border-rose-500/20 flex items-center gap-2">
-                <span role="img" aria-label="warning">⚠️</span> {error}
+                <span>⚠️</span> {error}
               </div>
             )}
           </div>
 
-          {/* Global Summary Display Banner */}
+          {/* Results Summary Template Block */}
           {analysis && (
-            <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 ring-1 transition-all text-left ${analysis.overall_verdict === 'TRUSTWORTHY' ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400 ring-emerald-500/20' : analysis.overall_verdict === 'HIGH RISK' ? 'border-rose-500/40 bg-rose-950/20 text-rose-400 ring-rose-500/20' : 'border-amber-500/40 bg-amber-950/20 text-amber-400 ring-amber-500/20'}`}>
-              <span className="text-[10px] font-black tracking-widest uppercase opacity-60 block mb-1">
-                Aggregated Source Verdict
-              </span>
-              <h2 className="text-2xl font-black tracking-tight mb-2 uppercase">
-                {analysis.overall_verdict}
-              </h2>
-              <p className="text-sm opacity-90 leading-relaxed max-w-2xl">
-                {analysis.overall_explanation}
-              </p>
+            <div className={`p-6 rounded-2xl border backdrop-blur-md mb-8 text-left ${analysis.overall_verdict === 'TRUSTWORTHY' ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400' : analysis.overall_verdict === 'HIGH RISK' ? 'border-rose-500/40 bg-rose-950/20 text-rose-400' : 'border-amber-500/40 bg-amber-950/20 text-amber-400'}`}>
+              <span className="text-[10px] font-black tracking-widest uppercase opacity-60 block mb-1">Aggregated Source Verdict</span>
+              <h2 className="text-2xl font-black tracking-tight mb-2 uppercase">{analysis.overall_verdict}</h2>
+              <p className="text-sm opacity-90 leading-relaxed max-w-2xl">{analysis.overall_explanation}</p>
             </div>
           )}
 
-          {/* Claims List Frame */}
+          {/* Claims List Breakdown Cards */}
           <div className="space-y-5 text-left">
             {analysis && analysis.claims && analysis.claims.length > 0 && (
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-slate-400 tracking-wider uppercase">
-                  Detailed Claims Breakdown
-                </h2>
+              <div className="pb-2 border-b border-slate-800">
+                <h2 className="text-sm font-bold text-slate-400 tracking-wider uppercase">Detailed Claims Breakdown</h2>
               </div>
             )}
 
@@ -330,46 +327,25 @@ export default function App() {
               const badgeColor = result.verdict === 'SUPPORTED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : result.verdict === 'REFUTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
               
               return (
-                <div key={index} className={`p-6 rounded-xl border border-slate-800/60 backdrop-blur-sm transition-all duration-300 hover:border-slate-700/80 ${cardStyles}`}>
+                <div key={index} className={`p-6 rounded-xl border border-slate-800/60 backdrop-blur-sm transition-all ${cardStyles}`}>
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
-                    <h3 className="text-base md:text-lg font-semibold text-slate-100 leading-snug flex-1">
-                      {result.claim_text}
-                    </h3>
-                    <span className={`px-2.5 py-1 text-xs font-black tracking-widest rounded border shrink-0 uppercase ${badgeColor}`}>
-                      {result.verdict}
-                    </span>
+                    <h3 className="text-base md:text-lg font-semibold text-slate-100 leading-snug flex-1">{result.claim_text}</h3>
+                    <span className={`px-2.5 py-1 text-xs font-black tracking-widest rounded border shrink-0 uppercase ${badgeColor}`}>{result.verdict}</span>
                   </div>
-                  
                   <div className="pt-3 border-t border-slate-800/60 mb-4">
-                    <span className="text-xs font-bold text-slate-500 tracking-wider uppercase block mb-1">
-                      Automated Verification Report
-                    </span>
-                    <p className="text-slate-400 text-sm leading-relaxed">
-                      {result.explanation}
-                    </p>
+                    <span className="text-xs font-bold text-slate-500 tracking-wider uppercase block mb-1">Automated Verification Report</span>
+                    <p className="text-slate-400 text-sm leading-relaxed">{result.explanation}</p>
                   </div>
-
                   {result.sources && result.sources.length > 0 && (
                     <div className="pt-3 border-t border-slate-900/60">
-                      <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase block mb-2">
-                        Retrieved Verification Sources
-                      </span>
+                      <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase block mb-2">Retrieved Verification Sources</span>
                       <div className="flex flex-wrap gap-2">
                         {result.sources.map((src, sIdx) => (
-                          <a
-                            key={sIdx}
-                            href={src.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs bg-slate-900 text-indigo-400 border border-slate-800 rounded-lg px-3 py-1.5 hover:bg-indigo-500/10 hover:border-indigo-500/30 inline-flex items-center gap-1.5 transition-all max-w-full truncate"
-                            title={src.title}
-                          >
+                          <a key={sIdx} href={src.url} target="_blank" rel="noopener noreferrer" className="text-xs bg-slate-900 text-indigo-400 border border-slate-800 rounded-lg px-3 py-1.5 hover:border-indigo-500/30 inline-flex items-center gap-1.5 transition-all truncate max-w-full" title={src.title}>
                             <svg className="w-3 h-3 text-slate-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                             </svg>
-                            <span className="truncate max-w-50 sm:max-w-75">
-                              {src.title}
-                            </span>
+                            <span className="truncate max-w-xs">{src.title}</span>
                           </a>
                         ))}
                       </div>
