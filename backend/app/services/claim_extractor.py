@@ -41,8 +41,29 @@ async def extract_claims_with_ai(text: str) -> list:
             temperature=0.1,
         )
 
-        parsed_response=json.loads(completion.choice[0].message.content)
+        parsed_response=json.loads(completion.choices[0].message.content)
         return parsed_response.get("claims",[])
     except Exception as e:
         print(f"Groq Claims Extraction Failure: {e}")
         return []
+    
+async def generate_summary_title(claims: list) -> str:
+    if not claims:
+        return "Untitled scan"
+    prompt = f"""
+    Analyze these fact-checking claims and generate a punchy, highly descriptive 3 to 5 word summary title for an application history tab.
+    Focus only on the main subject and event (e.g., "NEET-UG 2026 Paper Leak" or "RBI Digital Currency Update").
+    Respond ONLY with the raw title string. Do not include quotes, markdown accents, or concluding periods.
+
+    Claims: {json.dumps(claims)}
+    """
+    try:
+        completion=client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role":"user", "content":prompt}],
+            temperature=0.3,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Title Generation Error: {e}")
+        return "Awaiting Breakdown"
