@@ -29,7 +29,7 @@ async def verify_claim_with_ai(claim: str,evidence: list) -> dict:
             "verdict": "UNVERIFIED",
             "explanation":"There is no evidence found across active search indexing to cross-examine this claim."
         }
-    just_snippets=[item["snippets"] for item in evidence]
+    just_snippets=[item["snippet"] for item in evidence]
 
     prompt = f"""
     You are a high-level fact-checking judge. Compare the given 'Claim' against the provided 'Web Evidence' snippets.
@@ -46,9 +46,9 @@ async def verify_claim_with_ai(claim: str,evidence: list) -> dict:
     """
     try:
         completion=client.chat.completions.create(
-            models="llama-3.3-70b-versatile",
+            model="llama-3.3-70b-versatile",
             messages=[{"role":"user", "content":prompt}],
-            response_format={"type":"json object"},
+            response_format={"type":"json_object"},
             temperature=0.1,
         )
         return json.loads(completion.choices[0].message.content)
