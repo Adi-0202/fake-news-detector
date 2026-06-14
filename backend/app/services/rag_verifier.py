@@ -3,6 +3,7 @@ import json
 import asyncio
 from groq import Groq
 from ddgs import DDGS
+from app.services.source_scorer import evaluate_evidence_consensus
 
 client=Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -57,9 +58,24 @@ async def verify_claim_with_ai(claim: str,evidence: list) -> dict:
         return {"verdict": "UNVERIFIED", "explanation": "Error running verification check."}
     
 async def parallel_verification_worker(claim: str) -> dict:
-    evidence = await asyncio.to_thread(fetch_search_evidence, claim)
-    verification = await verify_claim_with_ai(claim, evidence)
-    sources = [{"title": item["title"], "url": item["url"]} for item in evidence]
+    # Pull raw matching search returns
+    raw_evidence = await asyncio.to_thread(fetch_search_evidence, claim)
+    
+    # Run the raw items through the 4-layer trust matrix consensus matrix engine
+    verified_evidence = evaluate_evidence_consensus(raw_evidence)
+    
+    # Execute the primary Llama LLM judgment evaluation step
+    verification = await verify_claim_with_ai(claim, verified_evidence)
+    
+    # Structure serialization objects to map smoothly onto your frontend data contracts
+    sources = [
+        {
+            "title": f"[{item['credibility_score']}] {item['title']}", # Pre-pend score for fast frontend verification views
+            "url": item["url"]
+        } 
+        for item in verified_evidence
+    ]
+    
     return {
         "claim_text": claim,
         "verdict": verification.get("verdict", "UNVERIFIED"),
