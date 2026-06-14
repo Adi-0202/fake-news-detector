@@ -1,6 +1,7 @@
+import os
 import sqlite3
 
-DB_PATH="fact_checker.db"
+DB_PATH=os.getenv("DATABASE_URL", "fact_checker.db")
 
 def get_db_connection():
     conn=sqlite3.connect(DB_PATH)
@@ -23,4 +24,4 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-    print("Database successful")
+    print(f"Database intialized at: {DB_PATH}")
