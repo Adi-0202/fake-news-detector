@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { API_BASE_URL } from '../config';
 
 const TABS = [
   {
@@ -68,7 +69,7 @@ export default function UrlInputForm({ onResult }) {
     setError('');
     setLoading(true);
 
-    let endpoint = 'http://127.0.0.1:8000/analyze';
+    let endpoint = `${API_BASE_URL}/analyze`;
     let options = {};
     let sourceLabel = '';
 
@@ -91,13 +92,13 @@ export default function UrlInputForm({ onResult }) {
         };
       } else if (activeTab === 'pdf') {
         if (!pdfFile) { setError('Please select a PDF file.'); setLoading(false); return; }
-        endpoint = 'http://127.0.0.1:8000/analyze/pdf';
+        endpoint = `${API_BASE_URL}/analyze/pdf`;
         sourceLabel = `PDF: ${pdfFile.name}`;
         const fd = new FormData(); fd.append('file', pdfFile);
         options = { method: 'POST', body: fd };
       } else if (activeTab === 'image') {
         if (!imageFile) { setError('Please select an image.'); setLoading(false); return; }
-        endpoint = 'http://127.0.0.1:8000/analyze/image';
+        endpoint = `${API_BASE_URL}/analyze/image`;
         sourceLabel = `Image: ${imageFile.name}`;
         const fd = new FormData(); fd.append('file', imageFile);
         options = { method: 'POST', body: fd };
