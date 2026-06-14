@@ -3,6 +3,7 @@ import UrlInputForm from './components/UrlInputForm';
 import Home from './pages/Home';
 import Results from './pages/Results';
 import './index.css';
+import { API_BASE_URL } from './config';
 
 export default function App() {
   const [leftOpen, setLeftOpen] = useState(true);
@@ -12,7 +13,7 @@ export default function App() {
 
   // Load history from backend on mount
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/history')
+    fetch(`${API_BASE_URL}/history`)
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setHistory(data.slice().reverse()); })
       .catch(() => {});
