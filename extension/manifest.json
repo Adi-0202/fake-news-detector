@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "Neural Sieve Cascade",
+    "version": "1.0",
+    "description": "Multi-channel misinformation isolation and coreference analysis engine.",
+    "permissions": [
+        "activeTab",
+        "scripting"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    }
+}
