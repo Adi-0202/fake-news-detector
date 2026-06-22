@@ -66,7 +66,12 @@ async def analyze_payload(request: AnalyzeRequest):
     """Processes standardized web article URL links or raw text input entries."""
     print("Inbound request processing: JSON vector channel.")
     
-    if request.text and request.text.strip():
+    # if condition is for chrome extension scraping
+    if request.text and request.text.strip() and request.url and request.url.strip():
+        sanitized_text = normalize_raw_text(request.text)
+        return await execution_orchestrator(sanitized_text, request.url.strip())
+
+    elif request.text and request.text.strip():
         sanitized_text = normalize_raw_text(request.text)
         return await execution_orchestrator(sanitized_text, "Raw Text Entry")
         
