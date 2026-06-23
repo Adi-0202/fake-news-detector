@@ -91,8 +91,8 @@
       font-family: var(--ffm);
     }
 
-    /* ── BUTTON ── */
-    #analyze-btn {
+    /* ── BUTTON SYSTEM ── */
+    #analyze-btn, #dashboard-btn {
       width: 100%;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       padding: 10px 16px;
@@ -103,7 +103,13 @@
       cursor: pointer; transition: all .2s;
       letter-spacing: -.2px;
     }
-    #analyze-btn:hover:not(:disabled) { background: #6BA3FF; transform: translateY(-1px); }
+    #dashboard-btn {
+      margin-top: 8px; /* Pushes the button cleanly below the main scan trigger */
+    }
+    #analyze-btn:hover:not(:disabled), #dashboard-btn:hover { 
+      background: #6BA3FF; 
+      transform: translateY(-1px); 
+    }
     #analyze-btn:disabled { opacity: .38; cursor: not-allowed; transform: none; }
 
     /* ── STATUS OUTPUT ── */
@@ -125,9 +131,7 @@
       opacity: .35;
     }
     .status-wait  { color: #F59E0B; font-family: var(--ffm); font-size: 12px; }
-    .status-error {
-      color: #FF5D73; font-family: var(--ffm); font-size: 12px;
-    }
+    .status-error { color: #FF5D73; font-family: var(--ffm); font-size: 12px; }
     .status-idle  { color: var(--text3); font-family: var(--ffm); font-size: 12px; font-style: italic; }
 
     /* ── VERDICT BLOCK ── */
@@ -154,7 +158,6 @@
       margin-top: 16px; margin-bottom: 10px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
-      display: none;
       align-items: center; gap: 10px;
     }
     #claims-heading.visible { display: flex; }
@@ -254,7 +257,6 @@
 </head>
 <body>
 
-  <!-- HEADER -->
   <div class="header">
     <div class="logo">N</div>
     <div class="brand">NeuralSieve <span>Cascade</span></div>
@@ -263,7 +265,6 @@
     </div>
   </div>
 
-  <!-- BODY -->
   <div class="body">
     <p class="sub">Analyze the active article for factual accuracy using live DOM scraping + RAG engine.</p>
 
@@ -272,6 +273,15 @@
         <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
       </svg>
       Scan Active Article
+    </button>
+
+    <button id="dashboard-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+      Analyze Files (PDF / Image)
     </button>
 
     <div id="output" class="status-idle">Click scan to begin analysis…</div>

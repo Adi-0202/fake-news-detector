@@ -156,3 +156,8 @@ document.getElementById("analyze-btn").addEventListener("click", async () => {
     actionBtn.disabled = false;
   }
 });
+
+// Add to the bottom of popup.js (Replace placeholder link with your actual Vercel URL)
+document.getElementById("dashboard-btn").addEventListener("click", () => {
+  chrome.tabs.create({ url: "https://fake-news-detector-tawny.vercel.app" });
+});
