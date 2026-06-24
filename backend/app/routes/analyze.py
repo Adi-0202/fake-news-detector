@@ -7,7 +7,6 @@ from app.schemas.api_schemas import AnalyzeRequest, AnalysisResponse
 from app.db import get_db_connection
 
 # Import our modular, single-responsibility services
-from app.services.scraper import extract_article_text
 from app.services.text_processor import normalize_raw_text
 from app.services.pdf_processor import extract_text_from_pdf
 from app.services.image_processor import extract_text_from_image
@@ -74,16 +73,6 @@ async def analyze_payload(request: AnalyzeRequest):
     elif request.text and request.text.strip():
         sanitized_text = normalize_raw_text(request.text)
         return await execution_orchestrator(sanitized_text, "Raw Text Entry")
-        
-    elif request.url and request.url.strip():
-        url_target = request.url.strip()
-        raw_article_text = extract_article_text(url_target)
-        
-        if not raw_article_text:
-            raise HTTPException(status_code=400, detail="Unable to extract text content from the provided URL link.")
-            
-        sanitized_text = normalize_raw_text(raw_article_text)
-        return await execution_orchestrator(sanitized_text, url_target)
         
     raise HTTPException(status_code=400, detail="Invalid request parameters. Supply a valid URL or text block.")
 
