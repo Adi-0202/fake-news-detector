@@ -3,16 +3,6 @@ import { API_BASE_URL } from '../config';
 
 const TABS = [
   {
-    id: 'url',
-    label: 'URL',
-    icon: (
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      </svg>
-    ),
-  },
-  {
     id: 'text',
     label: 'Text',
     icon: (
@@ -48,8 +38,7 @@ const TABS = [
 ];
 
 export default function UrlInputForm({ onResult }) {
-  const [activeTab, setActiveTab] = useState('url');
-  const [url, setUrl] = useState('');
+  const [activeTab, setActiveTab] = useState('text');
   const [text, setText] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -60,7 +49,7 @@ export default function UrlInputForm({ onResult }) {
   const imageRef = useRef(null);
 
   const reset = () => {
-    setUrl(''); setText(''); setPdfFile(null); setImageFile(null);
+    setText(''); setPdfFile(null); setImageFile(null);
     if (pdfRef.current) pdfRef.current.value = '';
     if (imageRef.current) imageRef.current.value = '';
   };
@@ -74,15 +63,7 @@ export default function UrlInputForm({ onResult }) {
     let sourceLabel = '';
 
     try {
-      if (activeTab === 'url') {
-        if (!url.trim()) { setError('Please enter a URL.'); setLoading(false); return; }
-        sourceLabel = url.trim();
-        options = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url.trim(), text: '' }),
-        };
-      } else if (activeTab === 'text') {
+      if (activeTab === 'text') {
         if (!text.trim()) { setError('Please enter some text.'); setLoading(false); return; }
         sourceLabel = 'Raw Text Entry';
         options = {
@@ -120,7 +101,7 @@ export default function UrlInputForm({ onResult }) {
 
       reset();
     } catch (err) {
-      setError(err.message || 'Connection failed. Is the backend running on :8000?');
+      setError(err.message || 'Connection failed. Is the backend running?');
     } finally {
       setLoading(false);
     }
@@ -143,23 +124,6 @@ export default function UrlInputForm({ onResult }) {
 
       {/* Input box */}
       <div className="input-box">
-
-        {/* URL */}
-        {activeTab === 'url' && (
-          <div className="url-row">
-            <input
-              type="url"
-              className="fi"
-              placeholder="https://article-url.com/..."
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-            />
-            <button className="sub-btn" style={{ width: 'auto', marginTop: 0 }} onClick={handleSubmit} disabled={loading}>
-              {loading ? <><span className="spinner" /> Run</> : <><RunIcon /> Run</>}
-            </button>
-          </div>
-        )}
 
         {/* Text */}
         {activeTab === 'text' && (
