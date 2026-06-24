@@ -10,7 +10,8 @@ async def extract_claims_with_ai(text: str) -> list:
         return []
     
     prompt = f"""
-    You are an expert fact-checking extractor. Extract exactly 3 distinct, checkable factual claims from the news text provided below.
+    You are an expert fact-checking extractor. Extract between 1 to 3 maximum high-impact, checkable factual claims from the news text provided below.
+    DYNAMIC SIZING RULE: Do NOT pad data or extract minor/trivial assertions just to fill space. If the article text only contains 1 core verifiable news headline or fact, return exactly 1 object inside the array.
     
     COREFERENCE RESOLUTION CONSTRAINTS:
     1. Each claim statement must be completely SELF-CONTAINED, STANDALONE, and ATOMIC.
@@ -21,12 +22,18 @@ async def extract_claims_with_ai(text: str) -> list:
          * Complete: "[Full Name of Subject] was detained for allegedly selling the leaked [Specific Exam Name] question paper."
     4. A human reading a single claim completely out of context must understand exactly who, what, where, and when the claim refers to from that single sentence alone.
 
+    SEARCH QUERY OPTIMIZATION CONSTRAINTS:
+    1. For every extracted claim, you must formulate an optimized search engine query.
+    2. Format this query as a highly targeted question or search string that a human investigator would type into Google or DuckDuckGo to manually verify if this specific claim is true.
+    3. Include critical proper nouns, entity names, locations, and unique context keywords. Avoid vague phrases.
+
     You must respond ONLY with a JSON object matching this exact schema:
     {{
         "claims": [
-            "First fully self-contained factual claim",
-            "Second fully self-contained factual claim",
-            "Third fully self-contained factual claim"
+            {{
+                "claim": "Fully self-contained standalone factual claim sentence",
+                "search_query": "Optimized investigator-style search question to verify this specific claim"
+            }}
         ]
     }}
     

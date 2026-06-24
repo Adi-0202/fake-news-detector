@@ -27,7 +27,7 @@ async def execution_orchestrator(article_text: str, source_identifier: str) -> d
     if not claims_list:
         raise HTTPException(status_code=422, detail="AI could not isolate verifiable assertions from the input source text.")
 
-    tasks = [parallel_verification_worker(claim) for claim in claims_list]
+    tasks = [parallel_verification_worker(item["search_query"]) for item in claims_list]
     claims_results, summary_title = await asyncio.gather(
         asyncio.gather(*tasks),
         generate_summary_title(claims_list)
