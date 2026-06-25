@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.db import init_db
+from app.db import init_db, engine
+from app import models
 from app.routes import analyze, results
 
 app = FastAPI(

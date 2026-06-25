@@ -1,27 +1,28 @@
 import os
-import sqlite3
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-DB_PATH=os.getenv("DATABASE_URL", "fact_checker.db")
+DATABASE_URL=os.getenv("DATABASE_URL")
 
-def get_db_connection():
-    conn=sqlite3.connect(DB_PATH)
-    conn.row_factory=sqlite3.Row
-    return conn
+if not  DATABASE_URL:
+    raise ValueError("CRITICAL ERROR: DATABASE_URL environment variable is missing!")
+
+engine=create_engine(DATABASE_URL)
+
+sessionLocal=sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base=declarative_base()
 
 def init_db():
-    conn=get_db_connection()
-    cursor=conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS scans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT,
-            title TEXT,
-            overall_verdict TEXT,
-            overall_explanation TEXT,
-            claims TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-    print(f"Database intialized at: {DB_PATH}")
+    from app import models
+    print("Connecting to cloud Neon PostgreSQL cluster...")
+
+    Base.metadata.create_all(bind=engine)
+    print("Database sync complete: Tables 'users' and 'reports' are live!")
+
+def get_db():
+    db=sessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

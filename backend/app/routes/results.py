@@ -1,40 +1,31 @@
-import json
-from fastapi import APIRouter, HTTPException
-from app.db import get_db_connection
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.db import get_db
+from app.models import Report
 
 router = APIRouter(
     tags=["Results History"]
 )
 
 @router.get("/history")
-async def get_history_log():
+async def get_history_log(db: Session = Depends(get_db)):
     """
     Retrieves the top 10 most recent automated fact-checking scans 
     from the database to populate the frontend sidebar panel.
     """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, url, title, overall_verdict, overall_explanation, claims, timestamp 
-            FROM scans 
-            ORDER BY timestamp DESC 
-            LIMIT 10
-        """)
-        rows = cursor.fetchall()
-        conn.close()
+        reports = db.query(Report).order_by(Report.timestamp.desc()).limit(10).all()
         
         history_list = []
-        for r in rows:
+        for r in reports:
             history_list.append({
-                "id": r["id"],
-                "url": r["url"],
-                "title": r["title"] if r["title"] else r["url"],
-                "overall_verdict": r["overall_verdict"],
-                "overall_explanation": r["overall_explanation"],
-                "claims": json.loads(r["claims"]),
-                "timestamp": r["timestamp"]
+                "id": r.id,
+                "url": r.source_url,  
+                "title": r.title if r.title else r.source_url,
+                "overall_verdict": r.overall_verdict,
+                "overall_explanation": r.overall_explanation,
+                "claims": r.claims,   # Magic! SQLAlchemy delivers this natively as a Python list/dict array
+                "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M:%S") if r.timestamp else None
             })
             
         return history_list
