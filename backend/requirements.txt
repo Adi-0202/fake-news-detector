@@ -2,6 +2,7 @@ annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
 babel==2.18.0
+bcrypt==5.0.0
 brotli==1.2.0
 certifi==2026.5.20
 charset-normalizer==3.4.7
@@ -13,12 +14,15 @@ cuda-toolkit==13.0.2
 dateparser==1.4.0
 ddgs==9.14.4
 distro==1.9.0
+dnspython==2.8.0
 duckduckgo_search==8.1.1
 easyocr==1.7.2
+email-validator==2.3.0
 fake-useragent==2.2.0
 fastapi==0.136.1
 filelock==3.29.0
 fsspec==2026.4.0
+greenlet==3.5.2
 groq==1.2.0
 h11==0.16.0
 h2==4.3.0
@@ -56,12 +60,15 @@ nvidia-nvshmem-cu13==3.4.5
 nvidia-nvtx==13.0.85
 opencv-python-headless==4.13.0.92
 packaging==26.2
+passlib==1.7.4
 pillow==12.2.0
 primp==1.3.0
+psycopg2-binary==2.9.12
 pyclipper==1.4.0
 pydantic==2.13.4
 pydantic_core==2.46.4
 pydf==12
+PyJWT==2.13.0
 pypdf==6.12.2
 python-bidi==0.6.10
 python-dateutil==2.9.0.post0
@@ -78,6 +85,7 @@ shapely==2.1.2
 six==1.17.0
 sniffio==1.3.1
 socksio==1.0.0
+SQLAlchemy==2.0.51
 starlette==1.0.0
 sympy==1.14.0
 tifffile==2026.5.15
@@ -91,8 +99,3 @@ typing_extensions==4.15.0
 tzlocal==5.3.1
 urllib3==2.7.0
 uvicorn==0.47.0
-sqlalchemy
-psycopg2-binary
-passlib[bcrypt]
-pyjwt
-python-multipart

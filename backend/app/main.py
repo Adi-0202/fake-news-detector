@@ -7,7 +7,7 @@ load_dotenv()
 
 from app.db import init_db, engine
 from app import models
-from app.routes import analyze, results
+from app.routes import analyze, results, auth
 
 app = FastAPI(
     title="Neural Sieve Cascade - Core API",
@@ -28,6 +28,7 @@ def startup_populate_tables():
     print("--- Executing Application Boot Sequences ---")
     init_db()
 
+app.include_router(auth.router)
 app.include_router(analyze.router)
 app.include_router(results.router)
 
