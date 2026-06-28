@@ -1,7 +1,8 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine #sqlalchemy is a python toolkit to convert python objects into actual sql queries and execute them on the database. 
+                                     #create_engine is a factory function that creates a new SQLAlchemy Engine instance.
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker #orm(Object Relational Mapping).
 
 DATABASE_URL=os.getenv("DATABASE_URL")
 
@@ -23,6 +24,6 @@ def init_db():
 def get_db():
     db=sessionLocal()
     try:
-        yield db
+        yield db #yield is basically a return statement that allows the function to return a value and then resume execution from where it left off when called again.
     finally:
         db.close()

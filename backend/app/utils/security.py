@@ -1,16 +1,17 @@
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from passlib.context import CryptContext
-import jwt
+from passlib.context import CryptContext #Password hashing library for securely hashing and verifying passwords
+import jwt #JSON Web Token library for encoding and decoding JWTs
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer #authentication scheme for OAuth2 with password and bearer token
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import User
 
-pwd_context=CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context=CryptContext(schemes=["bcrypt"], deprecated="auto") #bcrypt is a adv password hashing algorithm and if we change the hashing scheme in the future,
+                                                                #the deprecated="auto" will allow us to verify old hashes and rehash them with the new scheme.
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -22,7 +23,7 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password:str, hashed_password:str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(plain_password, hashed_password) #constant-time comparison to prevent timing attacks
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta]=None) -> str:
     to_encode=data.copy()

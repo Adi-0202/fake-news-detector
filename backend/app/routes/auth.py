@@ -27,7 +27,7 @@ def register_user(payload: UserCreateSchema, db: Session = Depends(get_db)):
     new_user = User(email=payload.email, hashed_password=secured_hash)
     db.add(new_user)
     db.commit()
-    db.refresh(new_user)
+    db.refresh(new_user) #Just for accuring the new_user id to print, else no need of it.
 
     return {"message": "User registration completed successfully!", "user_id": new_user.id}
 
