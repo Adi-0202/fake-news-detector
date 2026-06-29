@@ -2,26 +2,41 @@ import { useState, useEffect } from 'react';
 import UrlInputForm from './components/UrlInputForm';
 import Home from './pages/Home';
 import Results from './pages/Results';
+import Auth from './pages/Auth'; // 1. Import your new Auth gateway view
 import './index.css';
 import { API_BASE_URL } from './config';
 
 export default function App() {
+  // Read token from storage on startup
+  const [token, setToken] = useState(localStorage.getItem('token') || null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [history, setHistory] = useState([]);
 
-  // Load history from backend on mount
+  // Load isolated history from backend when token is verified
   useEffect(() => {
-    fetch(`${API_BASE_URL}/history`)
+    if (!token) return;
+
+    fetch(`${API_BASE_URL}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` } // 2. Attach secure token
+    })
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setHistory(data.slice().reverse()); })
       .catch(() => {});
-  }, []);
+  }, [token]);
 
   const handleResult = (result) => {
     setAnalysis(result);
     setHistory(prev => [result, ...prev]);
+    setRightOpen(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setHistory([]);
+    setAnalysis(null);
     setRightOpen(false);
   };
 
@@ -34,11 +49,13 @@ export default function App() {
     : url?.startsWith('Image:') ? '◈ ' + url
     : url;
 
+  // 3. SECURE GATE BARRIER: Render login card if no session token exists
+  if (!token) {
+    return <Auth onLoginSuccess={(newToken) => setToken(newToken)} />;
+  }
+
   return (
-    <div
-      className="layout"
-      style={{ cursor: 'default' }}
-    >
+    <div className="layout" style={{ cursor: 'default' }}>
       {/* ── LEFT SIDEBAR ── */}
       <aside className={`left-sidebar${leftOpen ? '' : ' collapsed'}`}>
         <div className="ls-head">
@@ -79,7 +96,6 @@ export default function App() {
 
       {/* ── MAIN CONTENT ── */}
       <div className={`content-wrap${rightOpen ? ' shifted' : ''}`}>
-
         {/* Topbar */}
         <div className="topbar">
           <div className="tb-left">
@@ -89,12 +105,18 @@ export default function App() {
             <div className="tb-logo">N</div>
             <div className="tb-brand">NeuralSieve <span>Cascade</span></div>
           </div>
-          <button
-            className={`new-btn${rightOpen ? ' active' : ''}`}
-            onClick={() => setRightOpen(o => !o)}
-          >
-            <PlusIcon /> New Analysis
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className={`new-btn${rightOpen ? ' active' : ''}`}
+              onClick={() => setRightOpen(o => !o)}
+            >
+              <PlusIcon /> New Analysis
+            </button>
+            {/* 4. Sleek Minimal Logout Trigger Button */}
+            <button className="logout-btn" onClick={handleLogout} title="Revoke session credentials">
+              Logout
+            </button>
+          </div>
         </div>
 
         {/* Page content */}
@@ -123,7 +145,8 @@ export default function App() {
           </button>
         </div>
         <div className="rd-scroll">
-          <UrlInputForm onResult={handleResult} />
+          {/* 5. Pass down the active verification token payload to your URL entry forms */}
+          <UrlInputForm onResult={handleResult} token={token} />
         </div>
       </div>
     </div>
