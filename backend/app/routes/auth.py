@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import User
@@ -33,9 +34,9 @@ def register_user(payload: UserCreateSchema, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenSchema)
-def login_user(payload: UserCreateSchema, db: Session = Depends(get_db)):
+def login_user(payload: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # 1. Fetch user by email address
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(User.email == payload.username).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
