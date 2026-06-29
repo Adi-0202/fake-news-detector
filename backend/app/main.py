@@ -28,6 +28,14 @@ def startup_populate_tables():
     print("--- Executing Application Boot Sequences ---")
     init_db()
 
+@app.get("/")
+def read_root():
+    return {
+        "project": "Neural Sieve Cascade - Core API",
+        "status": "online",
+        "version": "2.0.0"
+    }
+
 app.include_router(auth.router)
 app.include_router(analyze.router)
 app.include_router(results.router)
