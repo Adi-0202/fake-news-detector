@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.schemas.api_schemas import AnalyzeRequest, AnalysisResponse
 from app.db import get_db
 from app.models import User, Report
+from app.utils.security import get_current_user
 
 # Import our modular, single-responsibility services
 from app.services.text_processor import normalize_raw_text
@@ -20,7 +21,7 @@ router = APIRouter(
     tags=["Analysis Engine"]
 )
 
-async def execution_orchestrator(article_text: str, source_identifier: str, db: Session) -> dict:
+async def execution_orchestrator(article_text: str, source_identifier: str, db: Session, current_user = User) -> dict:
     if not article_text.strip():
         raise HTTPException(status_code=400, detail="The extracted content payload contains no readable text.")
 
@@ -44,15 +45,8 @@ async def execution_orchestrator(article_text: str, source_identifier: str, db: 
     }
 
     try:
-        default_user=db.query(User).first()
-        if not default_user:
-            default_user = User(email="demo@neuralsieve.local", hashed_password="placeholder_hash")
-            db.add(default_user)
-            db.commit()
-            db.refresh(default_user)
-
         db_report=Report(
-            user_id=default_user.id,
+            user_id=current_user.id,
             title=summary_title,
             overall_verdict=overall_verdict,
             overall_explanation=overall_explanation,
@@ -71,24 +65,24 @@ async def execution_orchestrator(article_text: str, source_identifier: str, db: 
 
 
 @router.post("", response_model=AnalysisResponse)
-async def analyze_payload(request: AnalyzeRequest, db: Session=Depends(get_db)):
+async def analyze_payload(request: AnalyzeRequest, db: Session=Depends(get_db), current_user = Depends(User)):
     """Processes standardized web article URL links or raw text input entries."""
     print("Inbound request processing: JSON vector channel.")
     
     # if condition is for chrome extension scraping
     if request.text and request.text.strip() and request.url and request.url.strip():
         sanitized_text = normalize_raw_text(request.text)
-        return await execution_orchestrator(sanitized_text, request.url.strip(), db)
+        return await execution_orchestrator(sanitized_text, request.url.strip(), db, current_user)
 
     elif request.text and request.text.strip():
         sanitized_text = normalize_raw_text(request.text)
-        return await execution_orchestrator(sanitized_text, "Raw Text Entry", db)
+        return await execution_orchestrator(sanitized_text, "Raw Text Entry", db, current_user)
         
     raise HTTPException(status_code=400, detail="Invalid request parameters. Supply a valid URL or text block.")
 
 
 @router.post("/pdf", response_model=AnalysisResponse)
-async def analyze_pdf_document(file: UploadFile = File(...), db: Session=Depends(get_db)):
+async def analyze_pdf_document(file: UploadFile = File(...), db: Session=Depends(get_db), current_user: User = Depends(get_current_user)):
     """Ingests binary multi-page PDF documents, routes them through the extraction service, and initiates verification."""
     print(f"Inbound file upload processing: PDF stream -> {file.filename}")
     
@@ -100,14 +94,14 @@ async def analyze_pdf_document(file: UploadFile = File(...), db: Session=Depends
             raise HTTPException(status_code=422, detail="The uploaded PDF document does not contain extractable text layouts.")
             
         sanitized_text = normalize_raw_text(extracted_text)
-        return await execution_orchestrator(sanitized_text, f"PDF: {file.filename}", db)
+        return await execution_orchestrator(sanitized_text, f"PDF: {file.filename}", db, current_user)
         
     except RuntimeError as service_err:
         raise HTTPException(status_code=500, detail=str(service_err))
 
 
 @router.post("/image", response_model=AnalysisResponse)
-async def analyze_visual_forward(file: UploadFile = File(...), db: Session=Depends(get_db)):
+async def analyze_visual_forward(file: UploadFile = File(...), db: Session=Depends(get_db), current_user: User = Depends(get_current_user)):
     """Ingests image assets, extracts content strings via the OCR vision service, and initiates verification."""
     print(f"Inbound file upload processing: Image OCR stream -> {file.filename}")
     
@@ -119,7 +113,7 @@ async def analyze_visual_forward(file: UploadFile = File(...), db: Session=Depen
             raise HTTPException(status_code=422, detail="No readable printed alphanumeric characters could be detected in this image.")
             
         sanitized_text = normalize_raw_text(extracted_text)
-        return await execution_orchestrator(sanitized_text, f"Image: {file.filename}", db)
+        return await execution_orchestrator(sanitized_text, f"Image: {file.filename}", db, current_user)
         
     except RuntimeError as service_err:
         raise HTTPException(status_code=500, detail=str(service_err))

@@ -1,20 +1,27 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import Report
+from app.models import Report, User
+from app.utils.security import get_current_user
 
 router = APIRouter(
     tags=["Results History"]
 )
 
 @router.get("/history")
-async def get_history_log(db: Session = Depends(get_db)):
+async def get_history_log(db: Session = Depends(get_db), current_user: User=Depends(get_current_user)):
     """
     Retrieves the top 10 most recent automated fact-checking scans 
     from the database to populate the frontend sidebar panel.
     """
     try:
-        reports = db.query(Report).order_by(Report.timestamp.desc()).limit(10).all()
+        reports = (
+            db.query(Report)
+            .filter(Report.user_id == current_user.id)
+            .order_by(Report.timestamp.desc())
+            .limit(10)
+            .all()
+        )
         
         history_list = []
         for r in reports:

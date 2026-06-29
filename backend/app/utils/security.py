@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from passlib.context import CryptContext #Password hashing library for securely hashing and verifying passwords
+import bcrypt
 import jwt #JSON Web Token library for encoding and decoding JWTs
 
 from fastapi import Depends, HTTPException, status
@@ -10,9 +10,6 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import User
 
-pwd_context=CryptContext(schemes=["bcrypt"], deprecated="auto") #bcrypt is a adv password hashing algorithm and if we change the hashing scheme in the future,
-                                                                #the deprecated="auto" will allow us to verify old hashes and rehash them with the new scheme.
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 SECRET_KEY = os.getenv("JWT_SECRET", "fallback-secret-key-for-local-dev")
@@ -20,11 +17,20 @@ ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+    return hashed_bytes.decode("utf-8")
 
 def verify_password(plain_password:str, hashed_password:str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password) #constant-time comparison to prevent timing attacks
-
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"), 
+            hashed_password.encode("utf-8")
+        )
+    except Exception:
+        return False
+    
 def create_access_token(data: dict, expires_delta: Optional[timedelta]=None) -> str:
     to_encode=data.copy()
 
@@ -38,7 +44,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta]=None) -> 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def current_user(token: str=Depends(oauth2_scheme), db: Session=Depends(get_db)) -> User:
+def get_current_user(token: str=Depends(oauth2_scheme), db: Session=Depends(get_db)) -> User:
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
