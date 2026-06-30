@@ -7,15 +7,13 @@ export default function Auth({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // 1. Separate state tree to trace targeted field errors
   const [fieldErrors, setFieldErrors] = useState({ email: '', password: '' });
 
   const validateForm = () => {
     let isValid = true;
     const errors = { email: '', password: '' };
 
-    // Email client-side validation
+    // Email validation
     if (!email.trim()) {
       errors.email = 'Please fill out this field.';
       isValid = false;
@@ -24,12 +22,15 @@ export default function Auth({ onLoginSuccess }) {
       isValid = false;
     }
 
-    // Password client-side validation
+    // ─── HIGH-SECURITY PASSWORD VALIDATION ───
+    // Requires: Min 8 characters, at least 1 letter, 1 number, and 1 special character
+    const highSecurityRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+
     if (!password) {
       errors.password = 'Please fill out this field.';
       isValid = false;
-    } else if (password.length < 6) {
-      errors.password = `Please lengthen this text to 6 characters or more (you are currently using ${password.length} character${password.length > 1 ? 's' : ''}).`;
+    } else if (!highSecurityRegex.test(password)) {
+      errors.password = 'Security policy violation: Pass key must be at least 8 characters long and contain a mix of letters, numbers, and special symbols (!@#$%^&*).';
       isValid = false;
     }
 
@@ -40,8 +41,6 @@ export default function Auth({ onLoginSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
-    // 2. Run our custom theme-matched validation cascade
     if (!validateForm()) return;
 
     setLoading(true);
@@ -83,7 +82,6 @@ export default function Auth({ onLoginSuccess }) {
     }
   };
 
-  // Clear specific field tracking error as the operator edits inputs
   const handleInputChange = (field, value, setter) => {
     setter(value);
     if (fieldErrors[field]) {
@@ -100,7 +98,6 @@ export default function Auth({ onLoginSuccess }) {
           <p>{isLogin ? 'Provide keys to enter operations center' : 'Register identity bounds for data isolation'}</p>
         </div>
 
-        {/* 3. added noValidate here to completely disable native popups */}
         <form onSubmit={handleSubmit} className="auth-form" noValidate>
           {error && (
             <div className={`auth-alert ${error.includes('created') ? 'success' : 'error'}`}>
@@ -117,7 +114,6 @@ export default function Auth({ onLoginSuccess }) {
               value={email}
               onChange={(e) => handleInputChange('email', e.target.value, setEmail)}
             />
-            {/* Custom Field Error Component */}
             {fieldErrors.email && (
               <div className="field-warn-msg">
                 <WarningIcon /> {fieldErrors.email}
@@ -134,7 +130,6 @@ export default function Auth({ onLoginSuccess }) {
               value={password}
               onChange={(e) => handleInputChange('password', e.target.value, setPassword)}
             />
-            {/* Custom Field Error Component */}
             {fieldErrors.password && (
               <div className="field-warn-msg">
                 <WarningIcon /> {fieldErrors.password}
