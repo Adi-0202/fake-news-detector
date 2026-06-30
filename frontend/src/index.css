@@ -469,3 +469,29 @@ textarea.fi { resize: none; line-height: 1.6; }
   border-color: rgba(239, 68, 68, 0.2);
   color: #f87171;
 }
+
+/* ── Tactical Input Field Level Warnings ── */
+.auth-form input.input-error {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  background: #14090a;
+}
+
+.field-warn-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  border-radius: 4px;
+  margin-top: 6px;
+  line-height: 1.35;
+  animation: fieldFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fieldFadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
