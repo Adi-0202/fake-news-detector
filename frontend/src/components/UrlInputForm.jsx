@@ -37,7 +37,7 @@ const TABS = [
   },
 ];
 
-export default function UrlInputForm({ onResult }) {
+export default function UrlInputForm({ onResult, token }) {
   const [activeTab, setActiveTab] = useState('text');
   const [text, setText] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
@@ -66,27 +66,58 @@ export default function UrlInputForm({ onResult }) {
       if (activeTab === 'text') {
         if (!text.trim()) { setError('Please enter some text.'); setLoading(false); return; }
         sourceLabel = 'Raw Text Entry';
+        
         options = {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: '', text: text.trim() }),
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+          },
+          body: JSON.stringify({ 
+            url: '', 
+            text: text.trim() 
+          }),
         };
       } else if (activeTab === 'pdf') {
         if (!pdfFile) { setError('Please select a PDF file.'); setLoading(false); return; }
         endpoint = `${API_BASE_URL}/analyze/pdf`;
         sourceLabel = `PDF: ${pdfFile.name}`;
-        const fd = new FormData(); fd.append('file', pdfFile);
-        options = { method: 'POST', body: fd };
+        
+        const fd = new FormData(); 
+        fd.append('file', pdfFile);
+        
+        options = { 
+          method: 'POST', 
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: fd 
+        };
       } else if (activeTab === 'image') {
         if (!imageFile) { setError('Please select an image.'); setLoading(false); return; }
         endpoint = `${API_BASE_URL}/analyze/image`;
         sourceLabel = `Image: ${imageFile.name}`;
-        const fd = new FormData(); fd.append('file', imageFile);
-        options = { method: 'POST', body: fd };
+        
+        const fd = new FormData(); 
+        fd.append('file', imageFile);
+        
+        options = { 
+          method: 'POST', 
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: fd 
+        };
       }
 
       const res = await fetch(endpoint, options);
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("FastAPI Validation Failure Details:", errorData);
+        
+        if (errorData.detail && Array.isArray(errorData.detail)) {
+          throw new Error(`Validation Error: ${errorData.detail[0].msg}`);
+        }
+        throw new Error(errorData.detail || `Server error: ${res.status}`);
+      }
+      
       const data = await res.json();
 
       onResult({
@@ -192,6 +223,7 @@ function RunIcon() {
     </svg>
   );
 }
+
 function FileIcon({ size = 13 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -199,6 +231,7 @@ function FileIcon({ size = 13 }) {
     </svg>
   );
 }
+
 function ImageIcon({ size = 13 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -206,6 +239,7 @@ function ImageIcon({ size = 13 }) {
     </svg>
   );
 }
+
 function WarnIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
