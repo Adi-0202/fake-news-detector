@@ -21,7 +21,7 @@ router = APIRouter(
     tags=["Analysis Engine"]
 )
 
-async def execution_orchestrator(article_text: str, source_identifier: str, db: Session, current_user = User) -> dict:
+async def execution_orchestrator(article_text: str, source_identifier: str, db: Session, current_user: User) -> dict:
     if not article_text.strip():
         raise HTTPException(status_code=400, detail="The extracted content payload contains no readable text.")
 
@@ -45,7 +45,7 @@ async def execution_orchestrator(article_text: str, source_identifier: str, db: 
     }
 
     try:
-        db_report=Report(
+        db_report = Report(
             user_id=current_user.id,
             title=summary_title,
             overall_verdict=overall_verdict,
@@ -65,7 +65,7 @@ async def execution_orchestrator(article_text: str, source_identifier: str, db: 
 
 
 @router.post("", response_model=AnalysisResponse)
-async def analyze_payload(request: AnalyzeRequest, db: Session=Depends(get_db), current_user = Depends(User)):
+async def analyze_payload(request: AnalyzeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Processes standardized web article URL links or raw text input entries."""
     print("Inbound request processing: JSON vector channel.")
     
@@ -82,7 +82,7 @@ async def analyze_payload(request: AnalyzeRequest, db: Session=Depends(get_db), 
 
 
 @router.post("/pdf", response_model=AnalysisResponse)
-async def analyze_pdf_document(file: UploadFile = File(...), db: Session=Depends(get_db), current_user: User = Depends(get_current_user)):
+async def analyze_pdf_document(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Ingests binary multi-page PDF documents, routes them through the extraction service, and initiates verification."""
     print(f"Inbound file upload processing: PDF stream -> {file.filename}")
     
@@ -101,7 +101,7 @@ async def analyze_pdf_document(file: UploadFile = File(...), db: Session=Depends
 
 
 @router.post("/image", response_model=AnalysisResponse)
-async def analyze_visual_forward(file: UploadFile = File(...), db: Session=Depends(get_db), current_user: User = Depends(get_current_user)):
+async def analyze_visual_forward(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Ingests image assets, extracts content strings via the OCR vision service, and initiates verification."""
     print(f"Inbound file upload processing: Image OCR stream -> {file.filename}")
     
