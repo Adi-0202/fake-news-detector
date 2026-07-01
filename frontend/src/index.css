@@ -495,3 +495,35 @@ textarea.fi { resize: none; line-height: 1.6; }
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Interactive Password Reveal Layer ── */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 42px; /* Reserves inner padding space for visibility button */
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #4b5563; /* Blends with your muted palette labels */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  transition: color 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--accent, #3b82f6); /* Illuminates into your active core tone */
+}
