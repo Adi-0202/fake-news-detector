@@ -527,3 +527,27 @@ textarea.fi { resize: none; line-height: 1.6; }
 .password-toggle-btn:hover {
   color: var(--accent, #3b82f6); /* Illuminates into your active core tone */
 }
+
+/* ── Ensure workspace container allows relative anchoring ── */
+.content-wrap {
+  position: relative; /* Targets absolute coordinates inside here */
+  /* Keep your other existing .content-wrap properties identical */
+}
+
+/* ── Centered Dynamic System Disclaimer ── */
+.system-disclaimer {
+  position: absolute; /* Changed from fixed to absolute */
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--ff, sans-serif);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text3, #4B4D57); 
+  text-align: center;
+  letter-spacing: 0.1px;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.85;
+  white-space: nowrap;
+}

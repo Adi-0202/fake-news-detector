@@ -134,6 +134,9 @@ export default function App() {
             {analysis ? <Results analysis={analysis} /> : <Home />}
           </div>
         </div>
+        <div className="system-disclaimer">
+        NeuralSieve Cascade can make mistakes. Consider verifying critical operational data points.
+      </div>
       </div>
 
       {/* ── RIGHT DRAWER ── */}
