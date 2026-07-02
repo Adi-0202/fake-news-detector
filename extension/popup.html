@@ -5,293 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NeuralSieve Cascade</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg:      #09090B;
-      --bg2:     #0F1013;
-      --bg3:     #141417;
-      --bg4:     #18181C;
-      --border:  rgba(255,255,255,0.06);
-      --border2: rgba(255,255,255,0.10);
-      --accent:  #4F8CFF;
-      --accent2: #00D2A8;
-      --text:    #F0F0F2;
-      --text2:   #8B8D97;
-      --text3:   #4B4D57;
-      --ff:      'DM Sans', sans-serif;
-      --ffm:     'DM Mono', monospace;
-      --ffd:     'Syne', sans-serif;
-      --r:       10px;
-      --rl:      14px;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      width: 380px;
-      min-height: 200px;
-      font-family: var(--ff);
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
-    }
-
-    ::-webkit-scrollbar { width: 3px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-    /* ── HEADER ── */
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 16px 13px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg2);
-    }
-    .logo {
-      width: 26px; height: 26px;
-      border-radius: 7px;
-      background: var(--accent);
-      display: flex; align-items: center; justify-content: center;
-      font-family: var(--ffd); font-size: 13px; font-weight: 700;
-      color: #fff; flex-shrink: 0;
-    }
-    .brand {
-      font-family: var(--ffd);
-      font-size: 13px; font-weight: 700;
-      letter-spacing: -.3px; color: var(--text);
-      flex: 1;
-    }
-    .brand span { color: var(--text2); font-weight: 400; }
-    .live-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-family: var(--ffm); font-size: 9px; font-weight: 500;
-      letter-spacing: 1.4px; text-transform: uppercase;
-      color: var(--accent2);
-      padding: 4px 9px;
-      border: 1px solid rgba(0,210,168,.2);
-      background: rgba(0,210,168,.06);
-      border-radius: 5px;
-    }
-    .live-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: var(--accent2);
-      animation: blink 2s ease infinite;
-      flex-shrink: 0;
-    }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
-
-    /* ── BODY ── */
-    .body { padding: 14px 14px 16px; }
-
-    .sub {
-      font-size: 12px; color: var(--text3);
-      line-height: 1.6; margin-bottom: 14px;
-      font-family: var(--ffm);
-    }
-
-    /* ── BUTTON SYSTEM ── */
-    #analyze-btn, #dashboard-btn {
-      width: 100%;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      padding: 10px 16px;
-      background: var(--accent);
-      color: #fff; border: none;
-      border-radius: var(--r);
-      font-family: var(--ff); font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: all .2s;
-      letter-spacing: -.2px;
-    }
-    #dashboard-btn {
-      margin-top: 8px; /* Pushes the button cleanly below the main scan trigger */
-    }
-    #analyze-btn:hover:not(:disabled), #dashboard-btn:hover { 
-      background: #6BA3FF; 
-      transform: translateY(-1px); 
-    }
-    #analyze-btn:disabled { opacity: .38; cursor: not-allowed; transform: none; }
-
-    /* ── STATUS OUTPUT ── */
-    #output {
-      margin-top: 12px;
-      padding: 12px 14px;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: var(--rl);
-      font-size: 12.5px;
-      line-height: 1.6;
-      position: relative;
-      overflow: hidden;
-    }
-    #output::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, var(--accent) 0%, transparent 60%);
-      opacity: .35;
-    }
-    .status-wait  { color: #F59E0B; font-family: var(--ffm); font-size: 12px; }
-    .status-error { color: #FF5D73; font-family: var(--ffm); font-size: 12px; }
-    .status-idle  { color: var(--text3); font-family: var(--ffm); font-size: 12px; font-style: italic; }
-
-    /* ── VERDICT BLOCK ── */
-    .verdict-block {
-      border-radius: var(--rl);
-      padding: 14px 16px;
-      border: 1px solid;
-      position: relative; overflow: hidden;
-    }
-    .v-eyebrow {
-      font-family: var(--ffm); font-size: 8.5px; font-weight: 500;
-      letter-spacing: 1.8px; text-transform: uppercase;
-      opacity: .55; margin-bottom: 6px; display: block;
-    }
-    .v-title {
-      font-family: var(--ffd); font-size: 17px; font-weight: 800;
-      letter-spacing: -.5px; margin-bottom: 6px;
-    }
-    .v-text { font-size: 12px; line-height: 1.65; opacity: .82; }
-
-    /* ── CLAIMS HEADING ── */
-    #claims-heading {
-      display: none;
-      margin-top: 16px; margin-bottom: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
-      align-items: center; gap: 10px;
-    }
-    #claims-heading.visible { display: flex; }
-    .ch-label {
-      font-family: var(--ffm); font-size: 9px; font-weight: 500;
-      letter-spacing: 1.8px; text-transform: uppercase; color: var(--text3);
-    }
-    .ch-count {
-      font-family: var(--ffm); font-size: 9px;
-      padding: 2px 7px; border-radius: 4px;
-      background: var(--bg4); color: var(--text2);
-      border: 1px solid var(--border);
-    }
-
-    /* ── CLAIMS CONTAINER ── */
-    #claims-container {
-      max-height: 260px;
-      overflow-y: auto;
-      display: flex; flex-direction: column; gap: 8px;
-      padding-right: 2px;
-    }
-
-    /* ── CLAIM CARD ── */
-    .claim-card {
-      border-radius: var(--rl);
-      border: 1px solid;
-      padding: 12px 14px;
-      position: relative;
-      font-size: 12px; line-height: 1.55;
-    }
-    .card-bar {
-      position: absolute; top: 0; left: 0;
-      width: 2px; height: 100%;
-      border-radius: 2px 0 0 2px;
-    }
-    .claim-card-top {
-      display: flex; justify-content: space-between;
-      align-items: flex-start; gap: 10px; margin-bottom: 8px;
-    }
-    .claim-text {
-      font-size: 12.5px; font-weight: 500;
-      color: var(--text); line-height: 1.5; flex: 1;
-    }
-    .claim-badge {
-      font-family: var(--ffm); font-size: 7.5px; font-weight: 500;
-      letter-spacing: 1.3px; text-transform: uppercase;
-      padding: 3px 8px; border-radius: 4px;
-      border: 1px solid; white-space: nowrap; flex-shrink: 0;
-    }
-    .claim-divider { height: 1px; background: var(--border); margin-bottom: 8px; }
-    .claim-section-label {
-      font-family: var(--ffm); font-size: 8px; font-weight: 500;
-      letter-spacing: 1.4px; text-transform: uppercase;
-      color: var(--text3); display: block; margin-bottom: 4px;
-    }
-    .claim-reason { font-size: 11.5px; color: var(--text2); line-height: 1.6; }
-
-    /* ── SOURCE LINKS ── */
-    .links-section {
-      margin-top: 10px; padding-top: 10px;
-      border-top: 1px solid var(--border);
-    }
-    .links-label {
-      font-family: var(--ffm); font-size: 8px; font-weight: 500;
-      letter-spacing: 1.4px; text-transform: uppercase;
-      color: var(--text3); display: block; margin-bottom: 6px;
-    }
-    .links-row { display: flex; flex-wrap: wrap; gap: 5px; }
-    .proof-link {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px;
-      background: var(--bg2); border: 1px solid var(--border2);
-      border-radius: 6px; font-size: 10.5px;
-      color: var(--accent); text-decoration: none;
-      transition: all .18s; font-family: var(--ffm);
-      max-width: 160px; overflow: hidden;
-      text-overflow: ellipsis; white-space: nowrap;
-    }
-    .proof-link:hover { border-color: rgba(79,140,255,.4); background: rgba(79,140,255,.07); }
-
-    /* ── VERDICT COLOR TOKENS ── */
-    .v-trust  { --vc: #00C896; --vbg: rgba(0,200,150,0.06);  --vb: rgba(0,200,150,0.2); }
-    .v-risk   { --vc: #FF5D73; --vbg: rgba(255,93,115,0.06); --vb: rgba(255,93,115,0.2); }
-    .v-unveri { --vc: #F59E0B; --vbg: rgba(245,158,11,0.06);  --vb: rgba(245,158,11,0.2); }
-
-    /* ── SPINNER ── */
-    .spinner {
-      width: 13px; height: 13px;
-      border: 2px solid rgba(255,255,255,.2);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <!-- ── LINKING EXTRACTED POPUP STYLES SHEET ── -->
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
 
-  <div class="header">
-    <div class="logo">N</div>
-    <div class="brand">NeuralSieve <span>Cascade</span></div>
-    <div class="live-badge">
-      <span class="live-dot"></span> Live
+  <!-- ── SCREEN 1: SECURE IDENTITY PROTECTION GATEWAY ── -->
+  <div id="auth-screen" class="auth-page">
+    <div class="auth-card">
+      
+      <div class="auth-header">
+        <div class="auth-header-top">
+          <div class="auth-logo">N</div>
+          <div class="auth-brand">NeuralSieve <span>Cascade</span></div>
+          <div class="live-badge"><span class="live-dot"></span>Live</div>
+        </div>
+        <div id="auth-title" class="auth-title">Access Portal</div>
+        <div id="auth-subtitle" class="auth-subtitle">Provide credentials to enter the operations center.</div>
+      </div>
+
+      <form id="auth-form" noValidate>
+        <div class="auth-form-body">
+          
+          <div id="auth-alert-container" class="hidden"></div>
+
+          <!-- Email Field -->
+          <div class="form-group">
+            <label>Operator Email</label>
+            <input type="email" id="auth-email" placeholder="operator@neuralsieve.local" />
+            <div id="email-warn" class="field-warn-msg hidden"></div>
+          </div>
+
+          <!-- Password Field -->
+          <div class="form-group">
+            <label>Pass Key</label>
+            <div class="password-wrapper">
+              <input type="password" id="auth-password" placeholder="••••••••" />
+              <button type="button" id="password-toggle-btn" tabIndex="-1" title="Toggle password visibility">
+                <!-- EyeIcon Vector -->
+                <svg id="eye-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <!-- EyeOffIcon Vector -->
+                <svg id="eye-off-icon" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div id="password-warn" class="field-warn-msg hidden"></div>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" id="auth-submit-btn" class="auth-submit-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Authorize Pipeline
+          </button>
+        </div>
+      </form>
+
+      <div class="auth-footer">
+        <button type="button" id="auth-switch-btn">No account? <span>Register here</span></button>
+      </div>
+
     </div>
   </div>
 
-  <div class="body">
-    <p class="sub">Analyze the active article for factual accuracy using live DOM scraping + RAG engine.</p>
 
-    <button id="analyze-btn">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
-      </svg>
-      Scan Active Article
-    </button>
-
-    <button id="dashboard-btn">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-        <polyline points="15 3 21 3 21 9"/>
-        <line x1="10" y1="14" x2="21" y2="3"/>
-      </svg>
-      Analyze Files (PDF / Image)
-    </button>
-
-    <div id="output" class="status-idle">Click scan to begin analysis…</div>
-
-    <div id="claims-heading">
-      <span class="ch-label">Claims breakdown</span>
-      <span class="ch-count" id="claims-count">0 claims</span>
+  <!-- ── SCREEN 2: ACTIVE SECURED WORKSPACE OPERATIONS DASHBOARD ── -->
+  <div id="main-screen" class="hidden">
+    <div class="header-wrapper">
+      <div class="header">
+        <div class="logo">N</div>
+        <div class="brand">NeuralSieve <span>Cascade</span></div>
+        <div class="live-badge"><span class="live-dot"></span>Live</div>
+        <button id="logout-btn" class="logout-btn" title="Revoke system credentials layer">Logout</button>
+      </div>
     </div>
 
-    <div id="claims-container"></div>
+    <div class="body">
+      <p class="sub">Analyze the active article for factual accuracy using live DOM scraping + RAG engine.</p>
+
+      <button id="analyze-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        Scan Active Article
+      </button>
+
+      <button id="dashboard-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Analyze PDF, TXT & History
+      </button>
+
+      <div id="output" class="status-idle">Click scan to begin analysis…</div>
+
+      <div id="claims-heading">
+        <span class="ch-label">Claims breakdown</span>
+        <span class="ch-count" id="claims-count">0 claims</span>
+      </div>
+
+      <div id="claims-container"></div>
+    </div>
   </div>
 
   <script src="popup.js"></script>

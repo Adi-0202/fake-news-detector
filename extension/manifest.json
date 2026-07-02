@@ -5,12 +5,16 @@
     "description": "Multi-channel misinformation isolation and coreference analysis engine.",
     "permissions": [
         "activeTab",
-        "scripting"
+        "scripting",
+        "storage"
     ],
     "action": {
         "default_popup": "popup.html",
         "default_icon": "icon.png"
     },
+    "host_permissions": [
+    "https://neural-sieve-backend.onrender.com/*"
+    ],
     "icons": {
     "16": "icon.png",
     "32": "icon.png",
