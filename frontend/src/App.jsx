@@ -2,41 +2,50 @@ import { useState, useEffect } from 'react';
 import UrlInputForm from './components/UrlInputForm';
 import Home from './pages/Home';
 import Results from './pages/Results';
-import Auth from './pages/Auth'; // 1. Import your new Auth gateway view
+import Auth from './pages/Auth'; 
 import './index.css';
 import { API_BASE_URL } from './config';
 
 export default function App() {
-  // Read token from storage on startup
   const [token, setToken] = useState(localStorage.getItem('token') || null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [history, setHistory] = useState([]);
 
+  // ── RECTIFIED: Shifted declaration to top to prevent hoisting reference errors ──
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setHistory([]);
+    setAnalysis(null);
+    setRightOpen(false);
+  };
+
   // Load isolated history from backend when token is verified
   useEffect(() => {
     if (!token) return;
 
     fetch(`${API_BASE_URL}/history`, {
-      headers: { 'Authorization': `Bearer ${token}` } // 2. Attach secure token
+      headers: { 'Authorization': `Bearer ${token}` }
     })
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setHistory(data.slice().reverse()); })
+      .then(r => {
+        // ── AUTO-LOGOUT GATES: If session token expired in background, revoke context ──
+        if (r.status === 401) {
+          handleLogout();
+          return;
+        }
+        return r.json();
+      })
+      .then(data => { 
+        if (data && Array.isArray(data)) setHistory(data.slice().reverse()); 
+      })
       .catch(() => {});
   }, [token]);
 
   const handleResult = (result) => {
     setAnalysis(result);
     setHistory(prev => [result, ...prev]);
-    setRightOpen(false);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setHistory([]);
-    setAnalysis(null);
     setRightOpen(false);
   };
 
@@ -49,7 +58,6 @@ export default function App() {
     : url?.startsWith('Image:') ? '◈ ' + url
     : url;
 
-  // 3. SECURE GATE BARRIER: Render login card if no session token exists
   if (!token) {
     return <Auth onLoginSuccess={(newToken) => setToken(newToken)} />;
   }
@@ -86,7 +94,7 @@ export default function App() {
                     {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <div className="htitle">{item.title}</div>
+                <div className="hist-top-title">{item.title}</div>
                 <div className="hurl">{srcLabel(item.url)}</div>
               </button>
             ))
@@ -112,7 +120,6 @@ export default function App() {
             >
               <PlusIcon /> New Analysis
             </button>
-            {/* 4. Sleek Minimal Logout Trigger Button */}
             <button className="logout-btn" onClick={handleLogout} title="Revoke session credentials">
               Logout
             </button>
@@ -134,9 +141,10 @@ export default function App() {
             {analysis ? <Results analysis={analysis} /> : <Home />}
           </div>
         </div>
+
         <div className="system-disclaimer">
-        NeuralSieve Cascade can make mistakes. Consider verifying critical operational data points.
-      </div>
+          NeuralSieve Cascade can make mistakes. Consider verifying critical operational data points.
+        </div>
       </div>
 
       {/* ── RIGHT DRAWER ── */}
@@ -148,8 +156,8 @@ export default function App() {
           </button>
         </div>
         <div className="rd-scroll">
-          {/* 5. Pass down the active verification token payload to your URL entry forms */}
-          <UrlInputForm onResult={handleResult} token={token} />
+          {/* ── RECTIFIED: Pass down handleLogout via an auth failure event callback hook ── */}
+          <UrlInputForm onResult={handleResult} token={token} onAuthFailure={handleLogout} />
         </div>
       </div>
     </div>

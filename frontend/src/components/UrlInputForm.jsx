@@ -37,7 +37,8 @@ const TABS = [
   },
 ];
 
-export default function UrlInputForm({ onResult, token }) {
+// ── RECTIFIED: Destructured onAuthFailure callback hook from system context props ──
+export default function UrlInputForm({ onResult, token, onAuthFailure }) {
   const [activeTab, setActiveTab] = useState('text');
   const [text, setText] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
@@ -108,6 +109,14 @@ export default function UrlInputForm({ onResult, token }) {
 
       const res = await fetch(endpoint, options);
       
+      // ── RECTIFIED: Intercept background token expiration events instantly ──
+      if (res.status === 401) {
+        if (onAuthFailure) {
+          onAuthFailure();
+        }
+        return;
+      }
+      
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         console.error("FastAPI Validation Failure Details:", errorData);
@@ -153,7 +162,7 @@ export default function UrlInputForm({ onResult, token }) {
         ))}
       </div>
 
-      {/* Input box */}
+      /* Input box */
       <div className="input-box">
 
         {/* Text */}
