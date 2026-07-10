@@ -74,3 +74,33 @@ async def generate_summary_title(claims: list) -> str:
     except Exception as e:
         print(f"Title Generation Error: {e}")
         return "Awaiting Breakdown"
+    
+async def classify_input_intent(text: str) -> str:
+    try:
+        chat_completion = client.chat.completions.create(
+            model="llama3-8b-8192", # Using a highly efficient, fast model for classification
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a strict text classification filter. Analyze the incoming text and classify it into exactly one word:\n"
+                        "1. If the text is a casual greeting, conversational chit-chat, personal question, generic AI prompt, or creative request "
+                        "(e.g., 'hi', 'how are you?', 'tell me a joke', 'write a poem about cars'), reply with exactly: CASUAL\n"
+                        "2. If the text contains news items, public assertions, factual declarations, statements of events, headlines, or an article to be cross-examined, reply with exactly: VERIFIABLE\n\n"
+                        "Rules: Respond with exactly ONE word ('CASUAL' or 'VERIFIABLE'). Do not include punctuation, reasoning, or formatting."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Text to classify: {text}"
+                }
+            ],
+            temperature=0.0,
+            max_tokens=3
+        )
+        
+        verdict = chat_completion.choices[0].message.content.strip().upper()
+        return verdict
+    except Exception as e:
+        print(f"Intent filter warning (defaulting to bypass): {e}")
+        return "VERIFIABLE"

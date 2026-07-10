@@ -8,14 +8,16 @@ from app.schemas.api_schemas import AnalyzeRequest, AnalysisResponse
 from app.db import get_db
 from app.models import User, Report
 from app.utils.security import get_current_user
-from app.utils.limiter import rate_limit_analyze  # ── INJECTED RATE LIMITER UTIL ──
+from app.utils.limiter import rate_limit_analyze
 
 # Import our modular, single-responsibility services
 from app.services.text_processor import normalize_raw_text
 from app.services.pdf_processor import extract_text_from_pdf
 from app.services.image_processor import extract_text_from_image
-from app.services.claim_extractor import extract_claims_with_ai, generate_summary_title
 from app.services.rag_verifier import parallel_verification_worker, calculate_overall_status
+
+# ── UPDATED: Added classify_input_intent target handler ──
+from app.services.claim_extractor import extract_claims_with_ai, generate_summary_title, classify_input_intent
 
 router = APIRouter(
     prefix="/analyze",
@@ -23,10 +25,19 @@ router = APIRouter(
 )
 
 async def execution_orchestrator(article_text: str, source_identifier: str, db: Session, current_user: User) -> dict:
-    if not article_text.strip():
+    cleaned_text = article_text.strip()
+    if not cleaned_text:
         raise HTTPException(status_code=400, detail="The extracted content payload contains no readable text.")
 
-    claims_list = await extract_claims_with_ai(article_text)
+    # ── NEW: DYNAMIC INTENT CLASSIFICATION GATE ──
+    intent = await classify_input_intent(cleaned_text)
+    if intent == "CASUAL":
+        raise HTTPException(
+            status_code=400, 
+            detail="This input appears to be a casual message or conversational prompt. Please enter a factual claim, news headline, or article to fact-check."
+        )
+
+    claims_list = await extract_claims_with_ai(cleaned_text)
     if not claims_list:
         raise HTTPException(status_code=422, detail="AI could not isolate verifiable assertions from the input source text.")
 
@@ -70,7 +81,6 @@ async def analyze_payload(request: AnalyzeRequest, db: Session = Depends(get_db)
     """Processes standardized web article URL links or raw text input entries."""
     print("Inbound request processing: JSON vector channel.")
 
-    # if condition is for chrome extension scraping
     if request.text and request.text.strip() and request.url and request.url.strip():
         sanitized_text = normalize_raw_text(request.text)
         return await execution_orchestrator(sanitized_text, request.url.strip(), db, current_user)
