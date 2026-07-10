@@ -162,7 +162,7 @@ export default function UrlInputForm({ onResult, token, onAuthFailure }) {
         ))}
       </div>
 
-      /* Input box */
+      {/* Input box */}
       <div className="input-box">
 
         {/* Text */}
