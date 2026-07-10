@@ -551,3 +551,24 @@ textarea.fi { resize: none; line-height: 1.6; }
   opacity: 0.85;
   white-space: nowrap;
 }
+
+/* ── Live Demo Infrastructure Feature Guard Banner ── */
+.demo-notice-bar {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(79, 140, 255, 0.05);
+  border: 1px solid rgba(79, 140, 255, 0.15);
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #6BA3FF;
+  font-family: var(--ff, sans-serif);
+}
+
+.demo-notice-bar strong {
+  font-weight: 600;
+  color: #fff;
+}

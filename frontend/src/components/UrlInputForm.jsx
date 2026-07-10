@@ -209,11 +209,24 @@ export default function UrlInputForm({ onResult, token, onAuthFailure }) {
                 : <><div className="dz-lbl">Upload screenshot or image</div><div className="dz-sub">PNG, JPG, WEBP</div></>
               }
             </div>
-            <button className="sub-btn" onClick={handleSubmit} disabled={loading || !imageFile}>
-              {loading ? <><span className="spinner" /> Running OCR…</> : <><RunIcon /> Extract &amp; Verify</>}
-            </button>
-          </>
-        )}
+
+            {/* ── NEW: DYNAMIC LIVE DEMO ENVIRONMENT GUARD ── */}
+            {!window.location.hostname.includes('localhost') && (
+              <div className="demo-notice-bar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>
+                  <strong>Live Demo Note:</strong> Image OCR requires heavy system-level backend binaries not supported on the free cloud hosting tier. <strong>Clone this repository</strong> to experience local image verification!
+                </span>
+              </div>
+            )}
+
+    <button className="sub-btn" onClick={handleSubmit} disabled={loading || !imageFile}>
+      {loading ? <><span className="spinner" /> Running OCR…</> : <><RunIcon /> Extract &amp; Verify</>}
+    </button>
+  </>
+)}
 
         {error && (
           <div className="err-bar">
