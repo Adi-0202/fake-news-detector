@@ -247,6 +247,24 @@ export default function Auth({ onLoginSuccess }) {
           color: #00C896;
         }
 
+        /* ── SERVER SPIN UP WARNING NOTICE ── */
+        .server-boot-notice {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          padding: 11px 14px;
+          background: rgba(245, 158, 11, 0.04);
+          border: 1px solid rgba(245, 158, 11, 0.15);
+          border-radius: var(--r);
+          font-size: 12px;
+          line-height: 1.55;
+          color: #F59E0B;
+        }
+        .server-boot-notice strong {
+          font-weight: 600;
+          color: #fff;
+        }
+
         /* ── FORM GROUP ── */
         .form-group { display: flex; flex-direction: column; gap: 7px; }
 
@@ -425,6 +443,14 @@ export default function Auth({ onLoginSuccess }) {
                     <WarnIcon /> {fieldErrors.password}
                   </div>
                 )}
+              </div>
+
+              {/* ── RENDER CONTAINER COLD START INFRASTRUCTURE NOTICE ── */}
+              <div className="server-boot-notice">
+                <WarnIcon />
+                <div>
+                  <strong>Server Boot Notice:</strong> Hosted on a free cloud tier container. If the application has been idle, establishing this connection can take up to <strong>45–60 seconds</strong> to spin up.
+                </div>
               </div>
 
               {/* Submit */}
