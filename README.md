@@ -1,4 +1,4 @@
-# Neural Sieve Cascade (NSC) — Core Engine
+#### Neural Sieve Cascade (NSC) — Core Engine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/)
@@ -13,9 +13,10 @@ Neural Sieve Cascade (NSC) is a decoupled, multi-channel misinformation detectio
 
 Modern misinformation operations exploit structural gaps in standard NLP models by utilizing non-standard formatting, complex cross-sentence references (pronouns hiding target entities), and short-lived web networks. Standard binary classifiers cannot keep up with changing global news cycles.
 
-**NSC solves this using a two-pronged hybrid architecture:**
-1. **Real-time Open Web RAG Pipeline (Active Phase 1):** Extracts factual assertions, cleans and normalizes source environments, checks domain integrity metrics to defeat typosquatting, and cross-references assertions against live public records.
-2. **Local Machine Learning Cascade (Upcoming Phase 3):** An asynchronous, localized sorting cascade utilizing a multi-stage classification network designed to flag malicious syntax patterns directly on the edge.
+**NSC solves this using a hybrid architecture:**
+
+1. **Real-time Open Web RAG Pipeline (Active):** Extracts factual assertions, cleans and normalizes source environments, checks domain integrity metrics to defeat typosquatting, and cross-references assertions against live public records.
+2. **Local Machine Learning Cascade:** An asynchronous, localized sorting cascade utilizing a multi-stage classification network designed to flag malicious syntax patterns directly on the edge.
 
 ---
 
@@ -28,7 +29,7 @@ Modern misinformation operations exploit structural gaps in standard NLP models 
 | **Orchestration Layer**| Python 3.12, Asyncio | Orchestrates parallel task pipelines and multi-threaded processing. |
 | **Extraction Tiers**| EasyOCR, PyTorch, PyPDF, Pillow | Multi-channel extraction (Computer Vision OCR + Vector Document parsing). |
 | **Reasoning Tier** | Groq Client SDK (`llama-3.3-70b-versatile`) | Coreference resolution mapping and ultimate factual adjudication. |
-| **Storage Layer** | SQLite 3, WAL Mode | Lightweight transactional logging and structural audit metrics. |
+| **Storage Layer** | PostgreSQL | Transactional logging and structural audit metrics. Local development uses a locally installed PostgreSQL instance; production uses a managed Neon Postgres database. |
 
 ---
 
@@ -83,38 +84,44 @@ Modern misinformation operations exploit structural gaps in standard NLP models 
 ## 📂 Project Repository Structure
 
 ```plaintext
-├── backend/                  # FastAPI Application Environment
-│   ├── app/
-│   │   ├── db.py             # Database initializes and handles connections
-│   │   ├── main.py           # Thin core application bootstrap entrypoint
-│   │   ├── routes/
-│   │   │   ├── analyze.py    # Primary intake routing coordinator
-│   │   │   └── results.py    # Scan logs historical telemetry exporter
-│   │   ├── schemas/
-│   │   │   └── api_schemas.py# Pydantic schema contracts & data validation models
-│   │   └── services/
-│   │       ├── claim_extractor.py # AI text breakdown and headline generation
-│   │       ├── image_processor.py # Lazy-loaded EasyOCR Vision processing
-│   │       ├── pdf_processor.py   # Multi-page binary layout extractor
-│   │       ├── rag_verifier.py    # Concurrently checks live open-web RAG engines
-│   │       ├── scraper.py         # Standard HTML web scraping utility
-│   │       ├── text_processor.py  # Defensive whitespace/payload sanitation
-│   │       └── source_scorer.py   # Multi-tiered domain trust scoring array
-│   └── requirements.txt       # Unified Python server dependencies manifest
-└── frontend/                 # React UI Workspace Application Environment
-    ├── src/
-    │   ├── config.js         # Centralized, environment-aware API URL manager
-    │   ├── App.jsx           # Master state manager and root UI shell container
-    │   ├── components/       # Reusable, atomic design interface presentation elements
-    │   │   ├── ClaimCard.jsx
-    │   │   ├── OverallScore.jsx
-    │   │   ├── SourceBadge.jsx
-    │   │   └── UrlInputForm.jsx
-    │   └── pages/            # View managers handling operational layouts
-    │       ├── Home.jsx
-    │       └── Results.jsx
-    ├── .env.development      # Targets localhost parameters during debugging
-    └── .env.production       # Points compilation streams to live cloud targets
+├── backend/ # FastAPI Application Environment
+│ ├── app/
+│ │ ├── db.py # Database initializes and handles connections
+│ │ ├── main.py # Thin core application bootstrap entrypoint
+│ │ ├── routes/
+│ │ │ ├── analyze.py # Primary intake routing coordinator
+│ │ │ └── results.py # Scan logs historical telemetry exporter
+│ │ ├── schemas/
+│ │ │ └── api_schemas.py# Pydantic schema contracts & data validation models
+│ │ └── services/
+│ │ ├── claim_extractor.py # AI text breakdown and headline generation
+│ │ ├── image_processor.py # Lazy-loaded EasyOCR Vision processing
+│ │ ├── pdf_processor.py # Multi-page binary layout extractor
+│ │ ├── rag_verifier.py # Concurrently checks live open-web RAG engines
+│ │ ├── scraper.py # Standard HTML web scraping utility
+│ │ ├── text_processor.py # Defensive whitespace/payload sanitation
+│ │ └── source_scorer.py # Multi-tiered domain trust scoring array
+│ └── requirements.txt # Unified Python server dependencies manifest
+├── extension/ # Chrome Browser Extension
+│ ├── icon.png
+│ ├── manifest.json
+│ ├── popup.css
+│ ├── popup.html
+│ └── popup.js
+└── frontend/ # React UI Workspace Application Environment
+├── src/
+│ ├── config.js # Centralized, environment-aware API URL manager
+│ ├── App.jsx # Master state manager and root UI shell container
+│ ├── components/ # Reusable, atomic design interface presentation elements
+│ │ ├── ClaimCard.jsx
+│ │ ├── OverallScore.jsx
+│ │ ├── SourceBadge.jsx
+│ │ └── UrlInputForm.jsx
+│ └── pages/ # View managers handling operational layouts
+│ ├── Home.jsx
+│ └── Results.jsx
+├── .env.development # Targets localhost parameters during debugging
+└── .env.production # Points compilation streams to live cloud targets
 ```
 
 ---
@@ -125,9 +132,23 @@ Modern misinformation operations exploit structural gaps in standard NLP models 
 
 - Python 3.12 or higher installed locally.
 - Node.js (v18.x or higher) and npm installed locally.
+- PostgreSQL installed and running locally.
 - A valid Groq API Key (Claim your key at the Groq Console).
 
-### 1. Backend Service Configuration
+### 1. Local PostgreSQL Setup
+
+Install PostgreSQL locally (via your OS package manager or the official installer), then create a database and user for the project:
+
+```bash
+# Example using psql
+psql -U postgres
+
+CREATE DATABASE fact_checker;
+CREATE USER fact_checker_user WITH PASSWORD 'your_local_password';
+GRANT ALL PRIVILEGES ON DATABASE fact_checker TO fact_checker_user;
+```
+
+### 2. Backend Service Configuration
 
 Navigate into the backend directory, spin up your python isolation environment, and trigger dependency mapping:
 
@@ -136,7 +157,7 @@ cd backend
 
 # Initialize your virtual environment isolation layer
 python3 -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
+source venv/bin/activate # On Windows use: venv\Scripts\activate
 
 # Install all backend dependencies
 pip install -r requirements.txt
@@ -147,6 +168,7 @@ Create a `.env` configuration file inside your `backend/` root directory:
 ```
 GROQ_API_KEY=your_groq_api_token_here
 OPEN_PAGERANK_API_KEY=optional_pagerank_token_here
+DATABASE_URL=postgresql://fact_checker_user:your_local_password@localhost:5432/fact_checker
 ```
 
 Launch the hot-reloading development server:
@@ -157,7 +179,7 @@ uvicorn app.main:app --reload --port 8000
 
 The active Swagger API documentation interface can be inspected live at `http://127.0.0.1:8000/docs`.
 
-### 2. Frontend Workspace Configuration
+### 3. Frontend Workspace Configuration
 
 Open a secondary independent terminal shell configuration and initialize the node engine dependencies:
 
@@ -182,33 +204,33 @@ Open your browser and navigate to the reported local server address (typically `
 
 ---
 
+## 🧩 Browser Extension Setup
+
+The Chrome extension lets you run NSC checks directly from your browser toolbar.
+
+1. Clone the repository (if you haven't already):
+
+   ```bash
+   git clone https://github.com/your-username/fake-news-detector.git
+   ```
+
+2. Open Google Chrome and navigate to `chrome://extensions`.
+3. Enable **Developer mode** using the toggle in the top-right corner.
+4. Click **Load unpacked**.
+5. Select the `extension/` folder from your cloned repository.
+6. The NSC extension icon will now appear in your Chrome toolbar. Pin it for quick access.
+7. Make sure your backend API is running (locally or pointed at the deployed Render URL) so the extension has a service to query.
+
+---
+
 ## 🛠️ Current Production Deployment Blueprint
 
 The production stack is currently deployed across a secure, split multi-cloud configuration to minimize costs while providing zero-downtime scalability:
 
 - **Backend API Engine:** Hosted on Render's Web Services connected directly to Python runtime configurations.
-  - **Memory Optimization Notice:** Due to Render's free memory limit (512MB RAM), the EasyOCR computer vision pipeline uses a Lazy-Loading Pattern. It remains completely unloaded at system boot and only opens if an image validation is requested.
+- **Database:** Hosted on Neon (serverless managed Postgres), connected to the backend via a pooled `DATABASE_URL` connection string.
+- **Memory Optimization Notice:** Due to Render's free memory limit (512MB RAM), the EasyOCR computer vision pipeline uses a Lazy-Loading Pattern. It remains completely unloaded at system boot and only opens if an image validation is requested.
 - **Frontend Web Application:** Hosted on Vercel's Hobby Infrastructure, featuring automated edge compilation triggered on every git push command.
-
----
-
-## 🗺️ Engineering Development Roadmap
-
-We are looking for core contributors to help expand the engine across the upcoming feature sprints:
-
-### 🔓 Phase 2: Multi-Tenancy & Decentralized User Key Architecture
-
-- Add database entities (`users`, `user_settings`) via core schema tables or SQLAlchemy migrations.
-- Transition from a single global environment token to a secure Runtime Client Initialization Model using OAuth2 and JWT bearer security guards.
-- Implement user profile settings views allowing individual developers to store and cycle through their custom Groq API tokens.
-
-### 🧠 Phase 3: The Custom Neural Sieve Cascade (NSC) Local ML Tier
-
-Integrate a local, high-speed machine learning model stack trained over a corpus of 651,191 malicious text records. The incoming text will pass through a local three-stage pipeline before escalating to the live web search tier:
-
-- **Stage 1 (Logistic Regression):** Ultra-fast syntactic checking to score statistical text layout vectors.
-- **Stage 2 (CNN/LSTM Network Architecture):** Evaluates sequential semantic flows to flag deep textual manipulation anomalies.
-- **Stage 3 (TinyBERT Transformer Layer):** Runs high-fidelity local entity classification checks.
 
 ---
 
