@@ -2,23 +2,30 @@ import { useState } from 'react';
 import { API_BASE_URL } from '../config';
 
 export default function Auth({ onLoginSuccess }) {
-  const [isLogin, setIsLogin] = useState(true);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
+  const [generatedKey, setGeneratedKey] = useState(''); // Holds one-time key after signup
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({ email: '', password: '' });
+  const [fieldErrors, setFieldErrors] = useState({ email: '', password: '', recoveryKey: '' });
 
   const validateForm = () => {
     let isValid = true;
-    const errors = { email: '', password: '' };
+    const errors = { email: '', password: '', recoveryKey: '' };
 
     if (!email.trim()) {
       errors.email = 'Please fill out this field.';
       isValid = false;
     } else if (!email.includes('@')) {
       errors.email = `Please include an '@' in the email address. '${email}' is missing an '@'.`;
+      isValid = false;
+    }
+
+    if (authMode === 'forgot' && !recoveryKey.trim()) {
+      errors.recoveryKey = 'Please fill out this field.';
       isValid = false;
     }
 
@@ -44,7 +51,7 @@ export default function Auth({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (authMode === 'login') {
         const formData = new URLSearchParams();
         formData.append('username', email);
         formData.append('password', password);
@@ -58,7 +65,8 @@ export default function Auth({ onLoginSuccess }) {
         if (!res.ok) throw new Error(data.detail || 'Login authentication failed.');
         localStorage.setItem('token', data.access_token);
         onLoginSuccess(data.access_token);
-      } else {
+
+      } else if (authMode === 'signup') {
         const res = await fetch(`${API_BASE_URL}/auth/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -66,8 +74,29 @@ export default function Auth({ onLoginSuccess }) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Account registration failed.');
-        setIsLogin(true);
-        setError('Account created! Please log in to confirm credentials.');
+        
+        // Save the one-time generated key token string and slide back to access panel
+        setGeneratedKey(data.recovery_key);
+        setAuthMode('login');
+        setError('Account created! Copy your emergency recovery key below immediately.');
+
+      } else if (authMode === 'forgot') {
+        const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            email: email.trim(), 
+            recovery_key: recoveryKey.trim(), 
+            new_password: password 
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Passkey re-configuration failed.');
+        
+        setAuthMode('login');
+        setRecoveryKey('');
+        setPassword('');
+        setError('Pass key successfully updated. Re-enter credentials to authorize pipeline.');
       }
     } catch (err) {
       setError(err.message);
@@ -81,10 +110,10 @@ export default function Auth({ onLoginSuccess }) {
     if (fieldErrors[field]) setFieldErrors(prev => ({ ...prev, [field]: '' }));
   };
 
-  const switchMode = () => {
-    setIsLogin(!isLogin);
+  const clearFormContext = () => {
     setError('');
-    setFieldErrors({ email: '', password: '' });
+    setGeneratedKey('');
+    setFieldErrors({ email: '', password: '', recoveryKey: '' });
     setShowPassword(false);
   };
 
@@ -265,6 +294,39 @@ export default function Auth({ onLoginSuccess }) {
           color: #fff;
         }
 
+        /* ── RECOVERY DISPLAY BOX ── */
+        .recovery-display-box {
+          padding: 12px 14px;
+          background: rgba(79, 140, 255, 0.04);
+          border: 1px dashed rgba(79, 140, 255, 0.3);
+          border-radius: var(--r);
+          font-size: 11.5px;
+          line-height: 1.5;
+          color: var(--text2);
+        }
+        .recovery-display-box span {
+          font-family: var(--ffm);
+          font-size: 9px;
+          color: var(--accent);
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          display: block;
+          margin-bottom: 4px;
+        }
+        .recovery-key-text {
+          font-family: var(--ffm);
+          font-size: 15px;
+          font-weight: 600;
+          color: #fff;
+          letter-spacing: 1.5px;
+          margin: 6px 0;
+          background: var(--bg3);
+          padding: 6px 10px;
+          border-radius: 6px;
+          border: 1px solid var(--border);
+          text-align: center;
+        }
+
         /* ── FORM GROUP ── */
         .form-group { display: flex; flex-direction: column; gap: 7px; }
 
@@ -353,6 +415,10 @@ export default function Auth({ onLoginSuccess }) {
           padding: 16px 28px 20px;
           border-top: 1px solid var(--border);
           text-align: center;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          align-items: center;
         }
         .auth-footer button {
           background: none; border: none; cursor: pointer;
@@ -362,6 +428,13 @@ export default function Auth({ onLoginSuccess }) {
         }
         .auth-footer button:hover { color: var(--accent); }
         .auth-footer button span { color: var(--accent); font-weight: 500; }
+        
+        .forgot-link-btn {
+          font-size: 11.5px !important;
+          color: var(--text3) !important;
+          margin-top: -2px;
+        }
+        .forgot-link-btn:hover { color: var(--text2) !important; }
       `}</style>
 
       <div className="auth-page">
@@ -380,12 +453,14 @@ export default function Auth({ onLoginSuccess }) {
               </div>
             </div>
             <div className="auth-title">
-              {isLogin ? 'Access Portal' : 'Create Account'}
+              {authMode === 'login' ? 'Access Portal' : authMode === 'signup' ? 'Create Account' : 'Recover Access'}
             </div>
             <div className="auth-subtitle">
-              {isLogin
+              {authMode === 'login'
                 ? 'Provide credentials to enter the operations center.'
-                : 'Register your identity to begin fact-checking.'}
+                : authMode === 'signup'
+                ? 'Register your identity to begin fact-checking.'
+                : 'Supply emergency token coordinates to amend account credentials.'}
             </div>
           </div>
 
@@ -394,9 +469,18 @@ export default function Auth({ onLoginSuccess }) {
             <div className="auth-form-body">
 
               {error && (
-                <div className={`auth-alert ${error.includes('created') ? 'success' : 'error'}`}>
-                  {error.includes('created') ? <CheckIcon /> : <WarnIcon />}
+                <div className={`auth-alert ${error.includes('created') || error.includes('successfully') ? 'success' : 'error'}`}>
+                  {error.includes('created') || error.includes('successfully') ? <CheckIcon /> : <WarnIcon />}
                   {error}
+                </div>
+              )}
+
+              {/* One-time Recovery Master Token Output Display Box */}
+              {generatedKey && (
+                <div className="recovery-display-box">
+                  <span>Vault Emergency Recovery Code</span>
+                  <div className="recovery-key-text">{generatedKey}</div>
+                  <p>Save this code offline securely. If you lose your password, this is the only protocol that can reconfigure your profile settings.</p>
                 </div>
               )}
 
@@ -417,9 +501,28 @@ export default function Auth({ onLoginSuccess }) {
                 )}
               </div>
 
+              {/* Emergency Recovery Key Input (Visible ONLY in Forgot Mode) */}
+              {authMode === 'forgot' && (
+                <div className="form-group">
+                  <label>Emergency Recovery Key</label>
+                  <input
+                    type="text"
+                    placeholder="NSC-XXXX-XXXX"
+                    className={fieldErrors.recoveryKey ? 'input-error' : ''}
+                    value={recoveryKey}
+                    onChange={e => handleInputChange('recoveryKey', e.target.value, setRecoveryKey)}
+                  />
+                  {fieldErrors.recoveryKey && (
+                    <div className="field-warn-msg">
+                      <WarnIcon /> {fieldErrors.recoveryKey}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Password */}
               <div className="form-group">
-                <label>Pass Key</label>
+                <label>{authMode === 'forgot' ? 'New Pass Key' : 'Pass Key'}</label>
                 <div className="password-wrapper">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -445,7 +548,7 @@ export default function Auth({ onLoginSuccess }) {
                 )}
               </div>
 
-              {/* ── RENDER CONTAINER COLD START INFRASTRUCTURE NOTICE ── */}
+              {/* Render Cold Start Warning Container */}
               <div className="server-boot-notice">
                 <WarnIcon />
                 <div>
@@ -453,26 +556,43 @@ export default function Auth({ onLoginSuccess }) {
                 </div>
               </div>
 
-              {/* Submit */}
+              {/* Submit Button */}
               <button type="submit" className="auth-submit-btn" disabled={loading}>
                 {loading ? (
                   <><span className="spinner" /> Processing…</>
-                ) : isLogin ? (
+                ) : authMode === 'login' ? (
                   <><LockIcon /> Authorize Pipeline</>
-                ) : (
+                ) : authMode === 'signup' ? (
                   <><PlusIcon /> Provision Account</>
+                ) : (
+                  <><CheckIcon /> Reconfigure Passkey</>
                 )}
               </button>
             </div>
           </form>
 
-          {/* ── FOOTER ── */}
+          {/* ── FOOTER NAVIGATION ── */}
           <div className="auth-footer">
-            <button onClick={switchMode}>
-              {isLogin
-                ? <>No account? <span>Register here</span></>
-                : <>Already provisioned? <span>Log in instead</span></>}
-            </button>
+            {authMode === 'login' && (
+              <>
+                <button type="button" onClick={() => { setAuthMode('signup'); clearFormContext(); }}>
+                  No account? <span>Register here</span>
+                </button>
+                <button type="button" className="forgot-link-btn" onClick={() => { setAuthMode('forgot'); clearFormContext(); }}>
+                  Forgot Pass Key?
+                </button>
+              </>
+            )}
+            {authMode === 'signup' && (
+              <button type="button" onClick={() => { setAuthMode('login'); clearFormContext(); }}>
+                Already provisioned? <span>Log in instead</span>
+              </button>
+            )}
+            {authMode === 'forgot' && (
+              <button type="button" onClick={() => { setAuthMode('login'); clearFormContext(); }}>
+                Return to <span>Access Portal</span>
+              </button>
+            )}
           </div>
 
         </div>
