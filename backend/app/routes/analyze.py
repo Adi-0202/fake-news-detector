@@ -15,8 +15,6 @@ from app.services.text_processor import normalize_raw_text
 from app.services.pdf_processor import extract_text_from_pdf
 from app.services.image_processor import extract_text_from_image
 from app.services.rag_verifier import parallel_verification_worker, calculate_overall_status
-
-# ── UPDATED: Added classify_input_intent target handler ──
 from app.services.claim_extractor import extract_claims_with_ai, generate_summary_title, classify_input_intent
 
 router = APIRouter(
@@ -29,7 +27,7 @@ async def execution_orchestrator(article_text: str, source_identifier: str, db: 
     if not cleaned_text:
         raise HTTPException(status_code=400, detail="The extracted content payload contains no readable text.")
 
-    # ── NEW: DYNAMIC INTENT CLASSIFICATION GATE ──
+    # Dynamic intent classification gate
     intent = await classify_input_intent(cleaned_text)
     if intent == "CASUAL":
         raise HTTPException(
@@ -41,7 +39,15 @@ async def execution_orchestrator(article_text: str, source_identifier: str, db: 
     if not claims_list:
         raise HTTPException(status_code=422, detail="AI could not isolate verifiable assertions from the input source text.")
 
-    tasks = [parallel_verification_worker(item["search_query"]) for item in claims_list]
+    # ── FIXED: Pass BOTH the explicit claim AND the search query into the worker ──
+    tasks = [
+        parallel_verification_worker(
+            claim=item["claim"], 
+            search_query=item.get("search_query", item["claim"])
+        ) 
+        for item in claims_list
+    ]
+    
     claims_results, summary_title = await asyncio.gather(
         asyncio.gather(*tasks),
         generate_summary_title(claims_list)
