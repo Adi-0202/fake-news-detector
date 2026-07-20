@@ -37,7 +37,6 @@ const TABS = [
   },
 ];
 
-// ── RECTIFIED: Destructured onAuthFailure callback hook from system context props ──
 export default function UrlInputForm({ onResult, token, onAuthFailure }) {
   const [activeTab, setActiveTab] = useState('text');
   const [text, setText] = useState('');
@@ -109,7 +108,7 @@ export default function UrlInputForm({ onResult, token, onAuthFailure }) {
 
       const res = await fetch(endpoint, options);
       
-      // ── RECTIFIED: Intercept background token expiration events instantly ──
+      // Intercept background token expiration events instantly
       if (res.status === 401) {
         if (onAuthFailure) {
           onAuthFailure();
@@ -210,7 +209,7 @@ export default function UrlInputForm({ onResult, token, onAuthFailure }) {
               }
             </div>
 
-            {/* ── NEW: DYNAMIC LIVE DEMO ENVIRONMENT GUARD ── */}
+            {/* Dynamic Live Demo Guard Alert */}
             {!window.location.hostname.includes('localhost') && (
               <div className="demo-notice-bar">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}>
@@ -222,13 +221,40 @@ export default function UrlInputForm({ onResult, token, onAuthFailure }) {
               </div>
             )}
 
-    <button className="sub-btn" onClick={handleSubmit} disabled={loading || !imageFile}>
-      {loading ? <><span className="spinner" /> Running OCR…</> : <><RunIcon /> Extract &amp; Verify</>}
-    </button>
-  </>
-)}
+            <button className="sub-btn" onClick={handleSubmit} disabled={loading || !imageFile}>
+              {loading ? <><span className="spinner" /> Running OCR…</> : <><RunIcon /> Extract &amp; Verify</>}
+            </button>
+          </>
+        )}
 
-        {error && (
+        {/* Dynamic Outage Warning Banner vs Standard Error */}
+        {error && error.includes("API expired from owner side") ? (
+          <div className="system-outage-banner" style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-start',
+            padding: '14px 16px',
+            background: 'rgba(239, 68, 68, 0.04)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: 'var(--r)',
+            color: '#EF4444',
+            lineHeight: '1.55',
+            fontSize: '12.5px',
+            marginTop: '16px',
+            textAlign: 'left'
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div>
+              <h4 style={{ fontWeight: '700', color: '#FFF', marginBottom: '3px', fontFamily: 'var(--ffd)', fontSize: '13.5px' }}>System Outage: API Key Expired</h4>
+              <p style={{ color: 'var(--text2)', margin: 0 }}>
+                The core LLM verification credentials have expired or exceeded their structural limits on the developer's cloud tier. Please notify the platform owner to renew operational resources.
+              </p>
+            </div>
+          </div>
+        ) : error && (
           <div className="err-bar">
             <WarnIcon /> {error}
           </div>
