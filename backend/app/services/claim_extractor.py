@@ -1,9 +1,35 @@
 import os
 import json
 from groq import Groq
+from fastapi import HTTPException, status
 
-GROQ_API_KEY=os.getenv("GROQ_API_KEY")
-client=Groq(api_key=GROQ_API_KEY)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY)
+
+
+# ── CORE API EXPIRATION & DEPRECATION EXCEPTION DETECTOR ──
+def handle_llm_api_failure(e: Exception):
+    err_msg = str(e).lower()
+    
+    # Catch any auth, key expiry, quota limits, model deprecations, or billing locks from Groq
+    quota_or_auth_keywords = [
+        "api key", "apikey", "auth", "unauthorized", "unauthenticated", 
+        "401", "quota", "limit", "balance", "billing", "expired",
+        "decommissioned", "model_decommissioned"
+    ]
+    
+    if any(keyword in err_msg for keyword in quota_or_auth_keywords):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="API expired from owner side. Please contact the administrator to refresh key vaults."
+        )
+    
+    # Fallback for generic operational faults
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Extraction engine execution failed: {str(e)}"
+    )
+
 
 async def extract_claims_with_ai(text: str) -> list:
     if not text.strip():
@@ -41,18 +67,18 @@ async def extract_claims_with_ai(text: str) -> list:
     """
     
     try:
-        completion=client.chat.completions.create(
+        completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role":"user", "content":prompt}],
-            response_format={"type":"json_object"},
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
             temperature=0.1,
         )
 
-        parsed_response=json.loads(completion.choices[0].message.content)
-        return parsed_response.get("claims",[])
+        parsed_response = json.loads(completion.choices[0].message.content)
+        return parsed_response.get("claims", [])
     except Exception as e:
-        print(f"Groq Claims Extraction Failure: {e}")
-        return []
+        handle_llm_api_failure(e)
+
     
 async def generate_summary_title(claims: list) -> str:
     if not claims:
@@ -65,20 +91,21 @@ async def generate_summary_title(claims: list) -> str:
     Claims: {json.dumps(claims)}
     """
     try:
-        completion=client.chat.completions.create(
+        completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role":"user", "content":prompt}],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Title Generation Error: {e}")
-        return "Awaiting Breakdown"
+        handle_llm_api_failure(e)
+
     
 async def classify_input_intent(text: str) -> str:
     try:
         chat_completion = client.chat.completions.create(
-            model="llama3-8b-8192", # Using a highly efficient, fast model for classification
+            # REPLACED: Updated decommissioned llama3-8b-8192 to active llama-3.1-8b-instant
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
@@ -102,5 +129,4 @@ async def classify_input_intent(text: str) -> str:
         verdict = chat_completion.choices[0].message.content.strip().upper()
         return verdict
     except Exception as e:
-        print(f"Intent filter warning (defaulting to bypass): {e}")
-        return "VERIFIABLE"
+        handle_llm_api_failure(e)
